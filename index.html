@@ -9,7 +9,7 @@ header{display:flex;align-items:center;gap:18px;padding:10px 22px;border-bottom:
 header h1{font-size:16px;margin:0;color:var(--accent);font-weight:650;white-space:nowrap}
 nav{display:flex;gap:2px;flex-wrap:wrap}nav button{background:none;border:0;color:var(--dim);font:inherit;padding:6px 11px;border-radius:6px;cursor:pointer}
 nav button.on,nav button:hover{color:var(--text);background:var(--panel2)}
-.asof{margin-left:auto;font-size:12px;color:var(--dim);white-space:nowrap}.asof.stale{color:var(--bad)}.gs{margin-left:12px;position:relative}footer{max-width:1380px;margin:0 auto;padding:0 22px 30px;color:var(--dim);font-size:12px}.gs input{width:260px}
+.asof{margin-left:auto;font-size:12px;color:var(--dim);white-space:nowrap}.asof.stale{color:var(--bad)}.gs{margin-left:12px;position:relative}.gs input{width:260px}
 .sugg{position:absolute;top:36px;right:0;width:340px;background:#0e1013;border:1px solid var(--line);border-radius:8px;overflow:hidden;display:none;z-index:30}
 .sugg div{padding:7px 11px;cursor:pointer;display:flex;justify-content:space-between;gap:8px}.sugg div:hover,.sugg div.sel{background:var(--panel2)}
 main{padding:18px 22px 40px;max-width:1380px;margin:0 auto}
@@ -51,7 +51,7 @@ button.btn:disabled{opacity:.4;cursor:default}
 </style></head><body>
 <header><h1>⚖ Market Explorer</h1><nav id="nav"></nav><span class="asof" id="asof"></span>
 <div class="gs"><input id="gsq" type="search" placeholder="Find an item…" autocomplete="off"><div class="sugg" id="sugg"></div></div></header>
-<main id="main"></main><footer>Advisory only: prices come from auction house scans by the site owner and may be out of date. Not affiliated with Blizzard Entertainment. Disenchant values are estimates.</footer><div id="tip"></div>
+<main id="main"></main><div id="tip"></div>
 <script>
 const $=s=>document.querySelector(s), M=$('#main'), TIP=$('#tip');
 const TABS=[['market','Market'],['browse','Browse'],['crafts','Crafts'],['ideas','Buy ideas'],['watch','Watch lists'],['compare','Compare'],['data','Data coverage']];
