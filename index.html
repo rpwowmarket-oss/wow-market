@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Guild Market Explorer</title><link rel="icon" href="data:,">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root{--bg:#121418;--panel:#1a1d23;--panel2:#20242b;--line:#2b3038;--text:#e7e3d9;--dim:#9b978d;--accent:#e2b54e;--good:#5fcf7a;--bad:#ec6f67;
+ --q0:#9d9d9d;--q1:#ececec;--q2:#2fd650;--q3:#3d8eff;--q4:#b45cff;--q5:#ff8000}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 "Segoe UI",system-ui,sans-serif}
+header{display:flex;align-items:center;gap:18px;padding:10px 22px;border-bottom:1px solid var(--line);background:#0e1013;position:sticky;top:0;z-index:10}
+header h1{font-size:16px;margin:0;color:var(--accent);font-weight:650;white-space:nowrap}
+nav{display:flex;gap:2px;flex-wrap:wrap}nav button{background:none;border:0;color:var(--dim);font:inherit;padding:6px 11px;border-radius:6px;cursor:pointer}
+nav button.on,nav button:hover{color:var(--text);background:var(--panel2)}
+.asof{margin-left:auto;font-size:12px;color:var(--dim);white-space:nowrap}.asof.stale{color:var(--bad)}.gs{margin-left:12px;position:relative}footer{max-width:1380px;margin:0 auto;padding:0 22px 30px;color:var(--dim);font-size:12px}.gs input{width:260px}
+.sugg{position:absolute;top:36px;right:0;width:340px;background:#0e1013;border:1px solid var(--line);border-radius:8px;overflow:hidden;display:none;z-index:30}
+.sugg div{padding:7px 11px;cursor:pointer;display:flex;justify-content:space-between;gap:8px}.sugg div:hover,.sugg div.sel{background:var(--panel2)}
+main{padding:18px 22px 40px;max-width:1380px;margin:0 auto}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px;min-width:0}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:11px 14px}.panel .stat{background:var(--panel2)}
+.stat b{display:block;font-size:19px;font-weight:600}.stat span{color:var(--dim);font-size:12px}
+h2{font-size:15px;margin:0 0 10px;font-weight:600;display:flex;align-items:center;gap:10px;flex-wrap:wrap}h2 small{color:var(--dim);font-weight:400;font-size:12px}
+table{width:100%;border-collapse:collapse}th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th{color:var(--dim);font-weight:500;font-size:12px;cursor:pointer;user-select:none}td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+tbody tr:hover{background:var(--panel2);cursor:pointer}
+input,select{background:#0d0f12;color:var(--text);border:1px solid var(--line);border-radius:6px;padding:7px 10px;font:inherit}
+.ctl{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}.ctl label{color:var(--dim);font-size:12px}
+.q0{color:var(--q0)}.q1{color:var(--q1)}.q2{color:var(--q2)}.q3{color:var(--q3)}.q4{color:var(--q4)}.q5{color:var(--q5)}
+.g{color:#f2c94c}.s{color:#c9ced6}.c{color:#d08a4e}.up{color:var(--good)}.down{color:var(--bad)}.dim{color:var(--dim)}
+.warn{background:#29230f;border:1px solid #574719;color:#eadba9;padding:8px 12px;border-radius:8px;margin-bottom:8px;font-size:13px}
+.tag{display:inline-block;font-size:11px;padding:1px 7px;border-radius:10px;background:#263a2a;color:var(--good);margin-left:6px}
+.tag.wait{background:#3a2626;color:var(--bad)}.tag.thin{background:#272b3a;color:#a8b3ff}
+a{color:var(--accent);cursor:pointer;text-decoration:none}a:hover{text-decoration:underline}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}.three{display:grid;grid-template-columns:repeat(auto-fit,minmax(430px,1fr));gap:16px}
+@media(max-width:1100px){.two,.three{grid-template-columns:1fr}}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden;font-weight:400}.seg button{background:none;border:0;color:var(--dim);padding:4px 10px;font:inherit;font-size:12px;cursor:pointer}
+.seg button.on{background:var(--panel2);color:var(--text)}
+.chart svg text{fill:var(--dim);font-size:11px}.chart{position:relative;width:100%}
+.legend{display:flex;gap:16px;font-size:12px;color:var(--dim);margin-top:6px;flex-wrap:wrap}.legend i{display:inline-block;width:14px;height:3px;vertical-align:middle;margin-right:5px;border-radius:2px}
+#tip{position:fixed;pointer-events:none;background:#0a0b0e;border:1px solid var(--line);padding:7px 10px;border-radius:7px;font-size:12px;display:none;z-index:40;min-width:150px}
+#tip .r{display:flex;justify-content:space-between;gap:14px}
+.err{color:var(--bad)}.crumb{color:var(--dim);font-size:12px;margin-bottom:6px}
+.cats{columns:4 230px;column-gap:14px}.cat{break-inside:avoid;margin-bottom:12px;background:var(--panel2);border-radius:8px;padding:9px 12px}
+.cat b{cursor:pointer;display:block;margin-bottom:3px}.cat b:hover{color:var(--accent)}.cat div{display:flex;justify-content:space-between;padding:1px 0;color:var(--dim);cursor:pointer;font-size:13px}.cat div:hover{color:var(--text)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}.chip{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:3px 6px 3px 10px;font-size:12px}
+.chip button{background:none;border:0;color:var(--dim);cursor:pointer;font-size:13px}
+.pager{display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-top:10px;color:var(--dim)}
+button.btn{background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:6px;padding:5px 11px;cursor:pointer;font:inherit;font-size:12px}
+button.btn:disabled{opacity:.4;cursor:default}
+.mono td{font-family:Consolas,monospace;font-size:12px}
+.scroll{overflow:auto}
+.mv{table-layout:auto}.mv td:first-child{max-width:190px;overflow:hidden;text-overflow:ellipsis}.mv td,.mv th{padding:6px 5px}
+</style></head><body>
+<header><h1>⚖ Market Explorer</h1><nav id="nav"></nav><span class="asof" id="asof"></span>
+<div class="gs"><input id="gsq" type="search" placeholder="Find an item…" autocomplete="off"><div class="sugg" id="sugg"></div></div></header>
+<main id="main"></main><footer>Advisory only: prices come from auction house scans by the site owner and may be out of date. Not affiliated with Blizzard Entertainment. Disenchant values are estimates.</footer><div id="tip"></div>
+<script>
+const $=s=>document.querySelector(s), M=$('#main'), TIP=$('#tip');
+const TABS=[['market','Market'],['browse','Browse'],['crafts','Crafts'],['ideas','Buy ideas'],['watch','Watch lists'],['compare','Compare'],['data','Data coverage']];
+const COLORS=['#e2b54e','#5b9cf0','#5fcf7a','#c27df0','#ec6f67','#4fd1c5'];
+function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
+function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
+let S={tab:'market'}, CMP=[]; try{CMP=JSON.parse(lsGet('cmp')||'[]')}catch(e){CMP=[]}
+// ================= DATA LAYER (static files instead of a server) =================
+// Everything is read from data/*.json.gz. Files are gzip; decompressed here with DecompressionStream
+// (if the host already decompressed them, the gzip magic bytes are missing and we just parse the text).
+let BUILT='';
+const _c={};
+function gz(path){ if(_c[path]) return _c[path];
+  return _c[path]=(async()=>{
+    const isMeta=path==='meta.json';
+    if(!isMeta) await META();
+    const r=await fetch('data/'+path+(isMeta?'?t='+Date.now():(BUILT?'?v='+BUILT:'')),isMeta?{cache:'no-store'}:{});
+    if(!r.ok) throw new Error('Could not load data/'+path+' (HTTP '+r.status+'). The site data may still be publishing; try again in a minute.');
+    let b=new Uint8Array(await r.arrayBuffer());
+    if(b[0]===0x1f&&b[1]===0x8b){
+      if(typeof DecompressionStream==='undefined') throw new Error('This browser is too old to open the data files. Use a current Chrome, Edge or Firefox.');
+      b=new Uint8Array(await new Response(new Blob([b]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer()); }
+    return JSON.parse(new TextDecoder().decode(b)); })().catch(e=>{ delete _c[path]; throw e; }); }
+let _meta; function META(){ return _meta||(_meta=gz('meta.json').then(m=>{ BUILT=String(m.built_at); return m; }).catch(e=>{ _meta=null; throw e; })); }
+const dayTs=day=>Date.parse(day+'T00:00:00Z')/1000+43200;
+
+let CL={}, SC={};
+const cname=c=>c==null?'Unknown':(CL[c]||'Class '+c);
+const sname=(c,s)=>s==null?'Unknown':((SC[c]||{})[s]||'Type '+s);
+let _T; function T(){ return _T||(_T=(async()=>{
+  const t=await gz('tables.json.gz'); CL=t.classes; SC=t.subclasses;
+  const items=new Map(); for(const r of t.items) items.set(r[0],{item_id:r[0],name:r[1],quality:r[2],ilvl:r[3],class_id:r[4],subclass_id:r[5],stack:r[6],vendor_sell:r[7],is_crafted:r[8]});
+  const recipes=new Map(t.recipes.map(r=>[r[0],{recipe_id:r[0],profession:r[1],output_item:r[2],output_count:r[3],name:r[4]}]));
+  const reagentsBy=new Map(), usedBy=new Map(), byOut=new Map();
+  const push=(m,k,v)=>{ let a=m.get(k); if(!a) m.set(k,a=[]); a.push(v); };
+  for(const r of t.reagents){ const g={recipe_id:r[0],reagent_item:r[1],qty:r[2],slot:r[3]}; push(reagentsBy,r[0],g); push(usedBy,r[1],g); }
+  for(const r of recipes.values()) push(byOut,r.output_item,r);
+  const vendor=new Map(t.vendor.map(r=>[r[0],{unit_price:r[1],limited:r[2]}]));
+  return {items,recipes,reagentsBy,usedBy,byOut,vendor}; })()); }
+let _B; function B(){ return _B||(_B=gz('computed/browse.json.gz')); }
+let _MET; function MET(){ return _MET||(_MET=(async()=>{
+  const j=await gz('computed/metrics.json.gz'), met=new Map(), stat=new Map();
+  for(const [id,row] of Object.entries(j.rows)){ const o={item_id:+id}; j.cols.forEach((c,k)=>o[c]=row[k]); met.set(+id,o); }
+  for(const [id,row] of Object.entries(j.stats)){ const o={}; j.stat_cols.forEach((c,k)=>o[c]=row[k]); stat.set(+id,o); }
+  return {met,stat}; })()); }
+let _CR; function CR(){ return _CR||(_CR=(async()=>{ const j=await gz('computed/crafts.json.gz'); return {professions:j.professions,rows:j.rows,by:new Map(j.rows.map(r=>[r.recipe_id,r]))}; })()); }
+const mgSort=(a,b)=>(b==null?-1e12:b)-(a==null?-1e12:a);
+
+// Daily series for some items over the last `rng` days ('all' = everything). Loads only the monthly files needed.
+async function getDaily(ids,rng){
+  const meta=await META(), last=meta.last_day; if(!last) return {};
+  let cut=null; if(rng!=='all'){ const d=new Date(last+'T00:00:00Z'); d.setUTCDate(d.getUTCDate()-(+rng-1)); cut=d.toISOString().slice(0,10); }
+  const files=await Promise.all(meta.months.filter(m=>!cut||m>=cut.slice(0,7)).map(m=>gz('daily/'+m+'.json.gz')));
+  const out={};
+  for(const id of ids){ const rows=[];
+    for(const f of files){ const a=f.items[id]; if(!a) continue;
+      for(const r of a){ const day=f.month+'-'+String(r[0]).padStart(2,'0'); if(cut&&day<cut) continue; rows.push([dayTs(day),r[1],r[2],r[3],r[4]?'scans':'auctionator']); } }
+    rows.sort((a,b)=>a[0]-b[0]); out[id]=rows; }
+  return out; }
+
+// Individual scans for one item over the last `rng` days of scanning.
+function decodeDay(f){ if(f._idx) return f._idx; const idx=new Map();
+  for(const s of f.scans){ let id=0; for(let k=0;k<s.ids.length;k++){ id+=s.ids[k]; let a=idx.get(id); if(!a) idx.set(id,a=[]); a.push({t:s.t,min_price:s.min[k],median_price:s.med[k],qty:s.qty[k],listings:s.n[k]}); } }
+  return f._idx=idx; }
+async function getScans(id,rng){
+  const meta=await META(); let days=meta.scan_days; if(!days.length) return [];
+  if(rng!=='all'){ const d=new Date(days[days.length-1]+'T00:00:00Z'); d.setUTCDate(d.getUTCDate()-(+rng-1)); const cut=d.toISOString().slice(0,10); days=days.filter(x=>x>=cut); }
+  const files=await Promise.all(days.map(d=>gz('scans/'+d+'.json.gz')));
+  return files.flatMap(f=>decodeDay(f).get(id)||[]).sort((a,b)=>a.t-b.t); }
+
+async function recipeHistory(d,rng){
+  const ids=[d.recipe.output_item,...d.reagents.map(g=>g.item_id)], S2=await getDaily(ids,rng);
+  const mp=id=>new Map((S2[id]||[]).map(r=>[r[0],r[1]]));
+  const outS=mp(d.recipe.output_item), regs=d.reagents.map(g=>({s:mp(g.item_id),qty:g.qty,v:g.vendor_buy})), h=[];
+  for(const [ts,lo] of outS){ let cost=0, ok=true;
+    for(const g of regs){ const p=[g.s.get(ts),g.v].filter(x=>x); if(!p.length){ ok=false; break; } cost+=Math.min(...p)*g.qty; }
+    if(ok){ const sale=lo*(d.recipe.output_count||1); h.push([ts,sale,cost,Math.round(sale*0.95-cost)]); } }
+  return h; }
+
+const API={
+  async overview(){ return gz('computed/overview.json.gz'); },
+  async categories(){ const [tb,b]=await Promise.all([T(),B()]), cats=new Map();
+    for(const inf of tb.items.values()){ const k=inf.class_id+'|'+inf.subclass_id; let e=cats.get(k); if(!e) cats.set(k,e={cl:inf.class_id,sc:inf.subclass_id,n:0,listed:0});
+      e.n++; const r=b.rows[inf.item_id]; if(r&&r[0]) e.listed++; }
+    const out=new Map();
+    for(const e of cats.values()){ let g=out.get(e.cl); if(!g) out.set(e.cl,g={class_id:e.cl,name:cname(e.cl),items:0,listed:0,subs:[]});
+      g.items+=e.n; g.listed+=e.listed; g.subs.push({subclass_id:e.sc,name:sname(e.cl,e.sc),items:e.n,listed:e.listed}); }
+    for(const g of out.values()) g.subs.sort((a,b)=>b.listed-a.listed);
+    return [...out.values()].sort((a,b)=>b.listed-a.listed); },
+  async browse(q){ const [tb,b]=await Promise.all([T(),B()]);
+    const term=(q.get('q')||'').trim().toLowerCase(), cl=q.get('class')||'', sc=q.get('sub')||'', minq=+(q.get('quality')??-1), listed=(q.get('listed')??'1')==='1', sort=q.get('sort')||'listings', page=+(q.get('page')||0), per=50;
+    let res=[];
+    for(const inf of tb.items.values()){ const i=inf.item_id, nm=inf.name;
+      if(term&&!nm.toLowerCase().includes(term)&&term!==String(i)) continue;
+      if(cl!==''&&String(inf.class_id)!==cl) continue; if(sc!==''&&String(inf.subclass_id)!==sc) continue;
+      if(minq>=0&&(inf.quality??-1)<minq) continue;
+      const r=b.rows[i]||[]; if(listed&&!r[0]) continue;
+      res.push({item_id:i,name:nm,quality:inf.quality,ilvl:inf.ilvl,cls:cname(inf.class_id),sub:sname(inf.class_id,inf.subclass_id),price:r[0],usual:r[1],listings:r[2],qty:r[3],ch1:r[4],ch7:r[5],spark:r[6]||[]}); }
+    const keyf={listings:r=>-(r.listings||0),price:r=>-(r.price||0),name:r=>r.name,ch7:r=>-(r.ch7??-9),ch7a:r=>(r.ch7??9),qty:r=>-(r.qty||0),ilvl:r=>-(r.ilvl||0)}[sort]||(r=>-(r.listings||0));
+    res.sort((a,b2)=>{ const x=keyf(a), y=keyf(b2); return typeof x==='string'?x.localeCompare(y):x-y; });
+    return {total:res.length,page,per,rows:res.slice(page*per,(page+1)*per)}; },
+  async suggest(q){ const term=(q.get('q')||'').trim().toLowerCase(); if(term.length<2) return [];
+    const [tb,b]=await Promise.all([T(),B()]), res=[];
+    for(const inf of tb.items.values()){ if(!inf.name.toLowerCase().includes(term)) continue; const r=b.rows[inf.item_id]||[];
+      res.push({item_id:inf.item_id,name:inf.name,quality:inf.quality,current_price:r[0],listings:r[2]||0}); }
+    res.sort((a,b2)=>((a.current_price?0:1)-(b2.current_price?0:1))||(b2.listings-a.listings)); return res.slice(0,12); },
+  async item(q){ const id=+q.get('id'), [tb,b,mm,cr]=await Promise.all([T(),B(),MET(),CR()]), inf=tb.items.get(id);
+    if(!inf) throw new Error('Unknown item #'+id);
+    const r=b.rows[id]||[], st=mm.stat.get(id)||{}, ven=tb.vendor.get(id);
+    const made_by=(tb.byOut.get(id)||[]).map(x=>{ const m=cr.by.get(x.recipe_id)||{}; return {recipe_id:x.recipe_id,name:x.name,profession:x.profession,output_count:x.output_count,reagent_cost:m.reagent_cost,margin:m.margin,status:m.status}; }).sort((a,b2)=>mgSort(a.margin,b2.margin));
+    const used_in=(tb.usedBy.get(id)||[]).map(g=>{ const x=tb.recipes.get(g.recipe_id), m=cr.by.get(g.recipe_id)||{}, oi=tb.items.get(x.output_item)||{}; return {recipe_id:x.recipe_id,name:x.name,profession:x.profession,qty:g.qty,margin:m.margin,status:m.status,output_item:x.output_item,quality:oi.quality}; })
+      .sort((a,b2)=>mgSort(a.margin,b2.margin)).slice(0,60);
+    return {info:{...inf,cls:cname(inf.class_id),sub:sname(inf.class_id,inf.subclass_id)}, metrics:mm.met.get(id)||null, vendor:ven||null,
+      stats:{days:st.days||0,first:st.first,all_low:st.all_low,all_high:st.all_high,median:st.median,avg_qty:st.avg_qty,ch1:r[4],ch7:r[5],ch30:st.ch30}, made_by, used_in}; },
+  async compare(q){ const tb=await T(); return (q.get('ids')||'').split(',').filter(x=>/^\d+$/.test(x.trim())).map(x=>{ const inf=tb.items.get(+x)||{}; return {item_id:+x,name:inf.name,quality:inf.quality}; }); },
+  async crafts(q){ const cr=await CR(), prof=q.get('prof')||'', minl=+(q.get('min_listings')||3), status=q.get('status')||'ok';
+    const rows=cr.rows.filter(r=>r.status===status&&(status!=='ok'||(r.out_listings||0)>=minl)&&(!prof||r.profession===prof)).sort((a,b)=>mgSort(a.margin,b.margin)).slice(0,500);
+    return {professions:cr.professions,rows}; },
+  async recipe(q){ const id=+q.get('id'), [tb,cr,mm]=await Promise.all([T(),CR(),MET()]), r=tb.recipes.get(id); if(!r) throw new Error('Unknown recipe #'+id);
+    const oi=tb.items.get(r.output_item)||{};
+    const reagents=(tb.reagentsBy.get(id)||[]).slice().sort((a,b)=>a.slot-b.slot).map(g=>{ const inf=tb.items.get(g.reagent_item)||{}, m=mm.met.get(g.reagent_item)||{}, v=tb.vendor.get(g.reagent_item);
+      return {item_id:g.reagent_item,qty:g.qty,slot:g.slot,name:inf.name,quality:inf.quality,current_price:m.current_price,expected_rate:m.expected_rate,listings:m.listings,ah_qty:m.qty,slope7:m.slope7,vendor_buy:v?v.unit_price:null}; });
+    return {recipe:{...r,output_name:oi.name,output_quality:oi.quality}, margin:cr.by.get(id)||null, reagents}; },
+  async signals(q){ const mf=+(q.get('max_fall')??-0.05), mp=+(q.get('min_price')??5000); const j=await gz('computed/signals.json.gz');
+    return j.rows.filter(r=>r.current_price>=mp&&(r.slope7==null||r.slope7>=mf)).slice(0,150); },
+  async watch(){ return gz('computed/watch.json.gz'); },
+  async disenchant(){ return (await gz('computed/disenchant.json.gz')).rows; },
+};
+async function api(p){ const i=p.indexOf('?'), name=i<0?p:p.slice(0,i), q=new URLSearchParams(i<0?'':p.slice(i+1)); const f=API[name]; if(!f) throw new Error('Unknown data request: '+name); return f(q); }
+const STALE_H=24;
+async function staleHtml(){ const m=await META(); if(!m.data_as_of) return '<div class="warn">No scan data has been published yet.</div>';
+  const h=(Date.now()/1000-m.data_as_of)/3600;
+  return h>STALE_H?`<div class="warn">These prices are ${h<48?Math.round(h)+' hours':Math.round(h/24)+' days'} old. The site is only updated when the owner publishes a new scan, so treat them with care.</div>`:''; }
+async function setAsof(){ const m=await META(), el=$('#asof'); if(!m.data_as_of){ el.textContent='no data yet'; return; }
+  const h=(Date.now()/1000-m.data_as_of)/3600; el.textContent='Data as of '+new Date(m.data_as_of*1000).toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}); el.title=m.realm||''; el.classList.toggle('stale',h>STALE_H); }
+// ================= END DATA LAYER =================
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function money(c,plain){ if(c==null||isNaN(c)) return plain?'–':'<span class="dim">–</span>'; c=Math.round(c); const neg=c<0; c=Math.abs(c);
+  const g=Math.floor(c/10000), s=Math.floor(c%10000/100), cc=c%100; let o=[];
+  const G=plain?'g':'<span class="g">g</span>', Sx=plain?'s':'<span class="s">s</span>', C=plain?'c':'<span class="c">c</span>';
+  if(g) o.push(g.toLocaleString()+G); if(s&&g<1000) o.push(s+Sx); if((cc&&g<10)||!o.length) o.push(cc+C); return (neg?'−':'')+o.join(' '); }
+const pct=(x,d=0)=>x==null?'<span class="dim">–</span>':(x*100).toFixed(d)+'%';
+function chg(x,suf=''){ if(x==null) return '<span class="dim">–</span>'; const v=x*100; return `<span class="${v>1?'up':v<-1?'down':'dim'}">${v>0?'+':''}${Math.abs(v)>=100?v.toFixed(0):v.toFixed(1)}%${suf}</span>`; }
+const iname=(id,name,q)=>`<a class="q${q??1}" onclick="event.stopPropagation();go('item',{id:${id}})">${esc(name||('item '+id))}</a>`;
+const ago=t=>{const m=Math.round((Date.now()/1000-t)/60); return m<60?m+' min ago':m<1440?(m/60).toFixed(1)+' h ago':(m/1440).toFixed(1)+' days ago'};
+const V=v=>`data-v="${v??''}"`;
+function nav(){ $('#nav').innerHTML=TABS.map(([k,l])=>`<button class="${S.tab==k?'on':''}" onclick="go('${k}')">${l}</button>`).join(''); }
+function go(t,extra,push=true){ S={tab:t,...(extra||{})}; if(push) history.pushState(S,'','#'+t+(S.id?'/'+S.id:'')); nav(); TIP.style.display='none';
+  M.innerHTML='<p class="dim">Loading…</p>'; render().catch(e=>M.innerHTML=`<div class="panel err">${esc(e.message)}</div>`); window.scrollTo(0,0); }
+window.onpopstate=e=>{ if(e.state) go(e.state.tab,e.state,false); };
+function sortable(tbl){ if(!tbl) return; tbl.querySelectorAll('th').forEach((th,i)=>th.onclick=()=>{ const tb=tbl.tBodies[0], rs=[...tb.rows];
+  const dir=th.dataset.d=th.dataset.d=='1'?'-1':'1'; rs.sort((a,b)=>{const x=a.cells[i].dataset.v??a.cells[i].innerText, y=b.cells[i].dataset.v??b.cells[i].innerText;
+  if(x===''&&y!=='') return 1; if(y===''&&x!=='') return -1; const nx=parseFloat(x), ny=parseFloat(y); return (isNaN(nx)||isNaN(ny)?String(x).localeCompare(y):nx-ny)*dir}); rs.forEach(r=>tb.appendChild(r)); }); }
+
+// ---------- sparkline
+function spark(pts,w=110,h=26){ if(!pts||pts.length<2) return '<span class="dim">–</span>';
+  const v=pts.map(p=>Array.isArray(p)?p[1]:p), mn=Math.min(...v), mx=Math.max(...v), r=mx-mn||1;
+  const P=pts.map((p,i)=>`${(i/(pts.length-1)*(w-4)+2).toFixed(1)},${(h-3-(v[i]-mn)/r*(h-6)).toFixed(1)}`).join(' ');
+  const col=v[v.length-1]>v[0]*1.02?'var(--good)':v[v.length-1]<v[0]*0.98?'var(--bad)':'var(--dim)';
+  return `<svg width="${w}" height="${h}" style="vertical-align:middle"><polyline fill="none" stroke="${col}" stroke-width="1.6" points="${P}"/></svg>`; }
+
+// ---------- main chart. series: {name,pts:[[t,v]],color,type:'line'|'area'|'bar'|'dots'|'band',axis:'l'|'r',fmt,dash,w,pts2(band lower edge)}
+function niceStep(raw){ const mag=Math.pow(10,Math.floor(Math.log10(raw||1))); return [1,2,2.5,5,10].map(k=>k*mag).find(k=>k>=raw); }
+function chart(el,series,o={}){
+  const H=o.height||300, W=Math.max(320,el.clientWidth||1000), P={l:o.padL||78,r:o.right?62:18,t:12,b:28};
+  const all=series.flatMap(s=>[...s.pts,...(s.pts2||[])]).filter(p=>p[1]!=null); if(!all.length){el.innerHTML='<p class="dim">No data for this range yet.</p>';return}
+  let x0=Math.min(...all.map(p=>p[0])), x1=Math.max(...all.map(p=>p[0])); if(x1==x0){x0-=43200;x1+=43200}
+  const bs=series.find(s=>s.type=='bar'); if(bs&&bs.pts.length){const pad=(x1-x0)/Math.max(6,bs.pts.length)*0.6; x0-=pad; x1+=pad;}
+  const scale=ax=>{ const v=series.filter(s=>(s.axis||'l')==ax).flatMap(s=>[...s.pts,...(s.pts2||[])].map(p=>p[1])).filter(x=>x!=null); if(!v.length) return null;
+    let lo=Math.min(...v), hi=Math.max(...v);
+    if(o.log&&ax=='l'){ lo=Math.max(1,lo*0.8); hi=hi*1.25; const L=x=>Math.log10(Math.max(x,1)); return {lo,hi,f:x=>(L(x)-L(lo))/(L(hi)-L(lo)||1),log:1}; }
+    if(!(o.zero===false&&ax=='l')) lo=Math.min(0,lo); else {const pad=(hi-lo)*0.15||Math.abs(hi)*0.1||1; const mn=lo; lo=lo-pad; hi=hi+pad; if(mn>=0) lo=Math.max(0,lo);}
+    const st=niceStep((hi-lo)/4||1); lo=Math.floor(lo/st)*st; hi=Math.ceil(hi/st)*st; if(hi==lo) hi=lo+st; return {lo,hi,st,f:x=>(x-lo)/(hi-lo)}; };
+  const SL=scale('l'), SR=o.right?scale('r'):null;
+  const X=x=>P.l+(x-x0)/(x1-x0)*(W-P.l-P.r), Y=(y,s)=>H-P.b-s.f(y)*(H-P.t-P.b);
+  let g='';
+  if(SL){ let ticks=[]; if(SL.log){ for(let e=Math.floor(Math.log10(SL.lo));e<=Math.ceil(Math.log10(SL.hi));e++) for(const k of [1,2,5]){const v=k*10**e; if(v>=SL.lo&&v<=SL.hi) ticks.push(v)} }
+    else for(let v=SL.lo;v<=SL.hi+SL.st*1e-6;v+=SL.st) ticks.push(v);
+    const lf=(series.find(s=>(s.axis||'l')=='l'&&s.fmt)||{}).fmt||(v=>v);
+    for(const v of ticks) g+=`<line x1="${P.l}" x2="${W-P.r}" y1="${Y(v,SL)}" y2="${Y(v,SL)}" stroke="#262a31"/><text x="${P.l-8}" y="${Y(v,SL)+4}" text-anchor="end">${lf(v,true)}</text>`; }
+  if(SR){ const rf=(series.find(s=>s.axis=='r'&&s.fmt)||{}).fmt||(v=>v); for(let v=SR.lo;v<=SR.hi+SR.st*1e-6;v+=SR.st) g+=`<text x="${W-P.r+8}" y="${Y(v,SR)+4}">${rf(v,true)}</text>`; }
+  const span=(x1-x0)/86400; const step=span>60?14:span>25?7:span>10?2:span>2.5?1:0;
+  if(step){ for(let t=Math.ceil(x0/86400)*86400+43200;t<=x1;t+=86400*step) if(t>=x0) g+=`<text x="${X(t)}" y="${H-8}" text-anchor="middle">${new Date(t*1000).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</text>`; }
+  else { const n=Math.max(2,Math.min(7,Math.floor((W-P.l-P.r)/150))); for(let k=0;k<=n;k++){ const t=x0+(x1-x0)*k/n; const dt=new Date(t*1000);
+    g+=`<text x="${X(t)}" y="${H-8}" text-anchor="${k==0?'start':k==n?'end':'middle'}">${span>0.8?dt.toLocaleDateString(undefined,{month:'short',day:'numeric'})+' ':''}${dt.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'})}</text>`; } }
+  if(o.refY!=null&&SL&&o.refY>=SL.lo&&o.refY<=SL.hi) g+=`<line x1="${P.l}" x2="${W-P.r}" y1="${Y(o.refY,SL)}" y2="${Y(o.refY,SL)}" stroke="#7a7461" stroke-dasharray="4 4"/>`;
+  for(const s of series){ const sc=(s.axis||'l')=='r'?SR:SL; if(!sc) continue; const pts=s.pts.filter(p=>p[1]!=null).sort((a,b)=>a[0]-b[0]); if(!pts.length) continue;
+    const base=Y(Math.max(sc.lo,Math.min(0,sc.hi)),sc);
+    if(s.type=='bar'){ const bw=Math.max(2,Math.min(26,(W-P.l-P.r)/pts.length*0.55)); g+=pts.map(p=>`<rect x="${X(p[0])-bw/2}" y="${Math.min(Y(p[1],sc),base)}" width="${bw}" height="${Math.abs(base-Y(p[1],sc))}" fill="${s.color}" opacity="${s.opacity||0.35}" rx="2"/>`).join(''); continue; }
+    if(s.type=='band'){ const dn=(s.pts2||[]).filter(p=>p[1]!=null).sort((a,b)=>b[0]-a[0]); g+=`<polygon fill="${s.color}" opacity="0.13" points="${[...pts,...dn].map(p=>X(p[0]).toFixed(1)+','+Y(p[1],sc).toFixed(1)).join(' ')}"/>`; continue; }
+    const line=pts.map(p=>X(p[0]).toFixed(1)+','+Y(p[1],sc).toFixed(1)).join(' ');
+    if(s.type=='area') g+=`<polygon fill="${s.color}" opacity="0.13" points="${X(pts[0][0])},${base} ${line} ${X(pts[pts.length-1][0])},${base}"/>`;
+    if(s.type!='dots') g+=`<polyline fill="none" stroke="${s.color}" stroke-width="${s.w||2}" ${s.dash?`stroke-dasharray="${s.dash}"`:''} stroke-linejoin="round" points="${line}"/>`;
+    if(s.type=='dots'||(pts.length<40&&!s.dash)) g+=pts.map(p=>`<circle cx="${X(p[0])}" cy="${Y(p[1],sc)}" r="${s.type=='dots'?2.6:2}" fill="${s.color}"/>`).join(''); }
+  el.innerHTML=`<svg width="${W}" height="${H}">${g}<line class="xh" y1="${P.t}" y2="${H-P.b}" stroke="#888" stroke-dasharray="3 3" style="display:none"/><rect x="${P.l}" y="${P.t}" width="${W-P.l-P.r}" height="${H-P.t-P.b}" fill="transparent"/></svg>`;
+  const svg=el.querySelector('svg'), xh=svg.querySelector('.xh'), xs=[...new Set(series.flatMap(s=>s.pts.filter(p=>p[1]!=null).map(p=>p[0])))].sort((a,b)=>a-b);
+  svg.onmouseleave=()=>{TIP.style.display='none'; xh.style.display='none'};
+  svg.onmousemove=e=>{ const r=svg.getBoundingClientRect(), mx=e.clientX-r.left; if(mx<P.l||mx>W-P.r||!xs.length){svg.onmouseleave();return}
+    const t=x0+(mx-P.l)/(W-P.l-P.r)*(x1-x0); let best=xs[0]; for(const x of xs) if(Math.abs(x-t)<Math.abs(best-t)) best=x;
+    xh.setAttribute('x1',X(best)); xh.setAttribute('x2',X(best)); xh.style.display='';
+    const seen=new Set(); const lines=series.filter(s=>s.name&&s.type!='band').map(s=>{ if(seen.has(s.name)) return ''; seen.add(s.name); const p=s.pts.find(p=>p[0]==best&&p[1]!=null);
+      return p?`<div class="r"><span style="color:${s.color}">${esc(s.name)}</span><b>${(s.fmt||(v=>v))(p[1])}</b></div>`:''}).join('');
+    const dt=new Date(best*1000); TIP.innerHTML=`<div class="dim">${o.daily?dt.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'}):dt.toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</div>${lines}`;
+    TIP.style.display='block'; TIP.style.left=Math.min(e.clientX+14,innerWidth-220)+'px'; TIP.style.top=(e.clientY+14)+'px'; };
+}
+const fmtMoney=(v,axis)=>axis?money(v,true):money(v);
+const fmtNum=(v,axis)=>{v=Math.round(v); return axis&&Math.abs(v)>=10000?(v/1000).toFixed(0)+'k':v.toLocaleString()};
+const fmtPct=v=>v.toFixed(0)+'%';
+const legend=items=>`<div class="legend">${items.map(([n,c])=>`<span><i style="background:${c}"></i>${n}</span>`).join('')}</div>`;
+const seg=(id,opts,cur)=>`<span class="seg" id="${id}">${opts.map(([k,l])=>`<button data-k="${k}" class="${k==cur?'on':''}">${l}</button>`).join('')}</span>`;
+function onSeg(id,fn){ document.querySelectorAll(`#${id} button`).forEach(b=>b.onclick=()=>{document.querySelectorAll(`#${id} button`).forEach(x=>x.classList.remove('on'));b.classList.add('on');fn(b.dataset.k)}); }
+
+// ---------- search boxes with suggestions
+function suggestBox(input,box,onPick,onEnter){ let t, sel=-1, items=[];
+  const show=()=>{ box.innerHTML=items.map((r,i)=>`<div class="${i==sel?'sel':''}" data-i="${i}"><span class="q${r.quality??1}">${esc(r.name)}</span><span>${r.current_price?money(r.current_price):'<span class="dim">not listed</span>'}</span></div>`).join(''); box.style.display=items.length?'block':'none';
+    box.querySelectorAll('div').forEach(d=>d.onmousedown=()=>pick(items[+d.dataset.i])); };
+  const pick=r=>{ if(!r) return; box.style.display='none'; input.value=''; onPick(r); };
+  input.oninput=()=>{clearTimeout(t); t=setTimeout(async()=>{ items=await api('suggest?q='+encodeURIComponent(input.value)); sel=-1; show(); },180)};
+  input.onkeydown=e=>{ if(e.key=='ArrowDown'){sel=Math.min(sel+1,items.length-1);show();e.preventDefault()} else if(e.key=='ArrowUp'){sel=Math.max(sel-1,0);show();e.preventDefault()}
+    else if(e.key=='Enter'){ if(sel>=0) pick(items[sel]); else if(onEnter){box.style.display='none'; onEnter(input.value); input.value='';} } else if(e.key=='Escape') box.style.display='none'; };
+  input.onblur=()=>setTimeout(()=>box.style.display='none',150); }
+suggestBox($('#gsq'),$('#sugg'),r=>go('item',{id:r.item_id}),v=>go('browse',{q:v}));
+
+async function render(){ return ({market,browse,item,crafts,recipe,ideas,watch,compare,data}[S.tab]||market)(); }
+
+// ---------- MARKET
+async function market(){
+  const o=await api('overview'), ls=o.last_scan, n=o.counts, ix=o.index, stale=await staleHtml();
+  const moverTable=(rs,title)=>`<div class="panel"><h2>${title}</h2><table class="mv"><thead><tr><th>Item</th><th class="n">Price</th><th class="n">7 days</th><th>14 days</th></tr></thead><tbody>
+   ${rs.map(r=>`<tr onclick="go('item',{id:${r.item_id}})"><td>${iname(r.item_id,r.name,r.quality)}</td><td class="n">${money(r.price)}</td><td class="n">${chg(r.ch7)}</td><td>${spark(r.spark,72,22)}</td></tr>`).join('')}</tbody></table></div>`;
+  const ix7=ix.length>1?ix[ix.length-1][1]/ix[Math.max(0,ix.length-8)][1]-1:null;
+  M.innerHTML=`${stale}${o.warnings.map(w=>`<div class="warn">${esc(w)}</div>`).join('')}
+  <div class="grid">
+   <div class="stat"><b>${ls?ago(ls.t):'–'}</b><span>last scan · ${ls?ls.items.toLocaleString():0} items, ${ls?ls.listings.toLocaleString():0} listings</span></div>
+   <div class="stat"><b>${n.days}</b><span>days of history (${n.first} → ${n.last})</span></div>
+   <div class="stat"><b>${n.priced.toLocaleString()}</b><span>items with price history · ${n.items.toLocaleString()} known</span></div>
+   <div class="stat"><b>${n.scans}</b><span>scans stored</span></div>
+   <div class="stat"><b>${n.recipes.toLocaleString()}</b><span>recipes captured</span></div>
+   <div class="stat"><b>${chg(ix7)}</b><span>market price level, last 7 days</span></div>
+  </div>
+  <div class="panel"><h2>Market price index <small>median item's price relative to its own typical price · 100 = typical</small></h2><div class="chart" id="cIdx"></div></div>
+  <div class="two">
+   <div class="panel"><h2>Supply per day <small>units on the AH and distinct items listed</small></h2><div class="chart" id="cSup"></div>${legend([['units listed (left)','#5b9cf0'],['distinct items (right)','#e2b54e']])}</div>
+   <div class="panel"><h2>Category trends <small>median 7-day price change per category</small></h2><div class="chart" id="cCat"></div></div>
+  </div>
+  <div class="three">${moverTable(o.movers.up,'Rising fastest · 7 days')}${moverTable(o.movers.down,'Falling fastest · 7 days')}${moverTable(o.movers.busiest,'Most listed right now')}</div>
+  <p class="dim">Movers include items with 3+ listings priced 50s or more; the 7-day change is measured against the median of the days around a week ago. Days before your own scans come from Auctionator's daily lows.</p>`;
+  chart($('#cIdx'),[{name:'Price index',pts:ix.map(r=>[r[0],r[1]]),color:'#e2b54e',type:'area',fmt:fmtPct}],{height:250,daily:1,refY:100,zero:false,padL:52});
+  chart($('#cSup'),[{name:'Units listed',pts:o.daily_supply.map(r=>[r[0],r[2]]),color:'#5b9cf0',type:'bar',fmt:fmtNum,opacity:.55},{name:'Distinct items',pts:o.daily_supply.map(r=>[r[0],r[1]]),color:'#e2b54e',axis:'r',fmt:fmtNum}],{height:240,daily:1,right:1,padL:56});
+  catBars($('#cCat'),o.categories);
+}
+function catBars(el,cats){ const W=el.clientWidth||600, rowH=26, H=cats.length*rowH+8, L=140, mid=L+(W-L)*0.55; const mx=Math.max(0.05,...cats.map(c=>Math.abs(c.median_ch7)));
+  const room=Math.min(mid-L-60,W-mid-60);
+  el.innerHTML=`<svg width="${W}" height="${H}">${cats.map((c,i)=>{const v=c.median_ch7, w=Math.abs(v)/mx*room, y=i*rowH+4;
+   return `<text x="${L-10}" y="${y+15}" text-anchor="end">${esc(c.name)} <tspan opacity=".6">(${c.items})</tspan></text><rect x="${v<0?mid-w:mid}" y="${y+3}" width="${Math.max(1,w)}" height="${rowH-10}" rx="3" fill="${v<0?'#ec6f67':'#5fcf7a'}" opacity=".85"/>
+   <text x="${v<0?mid-w-6:mid+w+6}" y="${y+15}" text-anchor="${v<0?'end':'start'}">${v>0?'+':''}${(v*100).toFixed(1)}%</text>`}).join('')}<line x1="${mid}" x2="${mid}" y1="0" y2="${H}" stroke="#555"/></svg>`; }
+
+// ---------- BROWSE
+async function browse(){
+  const [cats,r]=await Promise.all([api('categories'),api('browse?'+new URLSearchParams({q:S.q||'',class:S.cls??'',sub:S.sub??'',quality:S.quality??-1,listed:S.listed===false?0:1,sort:S.sort||'listings',page:S.page||0}))]);
+  const hasCat=S.cls!=null&&S.cls!=='';
+  const cur=hasCat?cats.find(c=>String(c.class_id)===String(S.cls)):null; const subn=cur&&S.sub!=null&&S.sub!==''?cur.subs.find(s=>String(s.subclass_id)===String(S.sub)):null;
+  M.innerHTML=`<div class="panel"><details ${hasCat||S.q?'':'open'}><summary style="cursor:pointer"><b>Categories</b> <span class="dim">· click a category or type</span></summary><div class="cats" style="margin-top:12px">${cats.map(c=>`<div class="cat"><b onclick="go('browse',{cls:${c.class_id}})">${esc(c.name)} <span class="dim" style="font-weight:400">${c.listed} on AH</span></b>
+    ${c.subs.map(s=>`<div onclick="go('browse',{cls:${c.class_id},sub:${s.subclass_id}})"><span>${esc(s.name)}</span><span>${s.listed}</span></div>`).join('')}</div>`).join('')}</div></details></div>
+  <div class="panel"><div class="crumb"><a onclick="go('browse')">All items</a>${cur?' › <a onclick="go(\'browse\',{cls:'+cur.class_id+'})">'+esc(cur.name)+'</a>':''}${subn?' › '+esc(subn.name):''}</div>
+   <div class="ctl"><input type="search" id="q" placeholder="Filter by name…" value="${esc(S.q||'')}" style="width:260px">
+    <label>Quality</label><select id="ql">${[[-1,'Any'],[0,'Poor+'],[1,'Common+'],[2,'Uncommon+'],[3,'Rare+'],[4,'Epic+']].map(([k,l])=>`<option value="${k}" ${String(S.quality??-1)==String(k)?'selected':''}>${l}</option>`).join('')}</select>
+    <label>Sort</label><select id="so">${[['listings','Most listed'],['qty','Most units'],['price','Price'],['ch7','Rising (7 days)'],['ch7a','Falling (7 days)'],['ilvl','Item level'],['name','Name']].map(([k,l])=>`<option value="${k}" ${(S.sort||'listings')==k?'selected':''}>${l}</option>`).join('')}</select>
+    <label><input type="checkbox" id="li" ${S.listed===false?'':'checked'}> on AH now</label><span class="dim">${r.total.toLocaleString()} items</span></div>
+   <div class="scroll"><table id="bt"><thead><tr><th>Item</th><th>Type</th><th class="n">ilvl</th><th class="n">Lowest now</th><th class="n">Usual</th><th class="n">Listings</th><th class="n">Units</th><th class="n">1 day</th><th class="n">7 days</th><th>14 days</th><th></th></tr></thead><tbody>
+   ${r.rows.map(x=>`<tr onclick="go('item',{id:${x.item_id}})"><td>${iname(x.item_id,x.name,x.quality)}</td><td class="dim">${esc(x.sub)}</td><td class="n">${x.ilvl??''}</td>
+    <td class="n" ${V(x.price)}>${money(x.price)}</td><td class="n" ${V(x.usual)}>${money(x.usual)}</td><td class="n">${x.listings??'–'}</td><td class="n">${x.qty??'–'}</td>
+    <td class="n" ${V(x.ch1)}>${chg(x.ch1)}</td><td class="n" ${V(x.ch7)}>${chg(x.ch7)}</td><td>${spark(x.spark)}</td>
+    <td><a title="Add to comparison" onclick="event.stopPropagation();addCmp(${x.item_id})">+ compare</a></td></tr>`).join('')}</tbody></table></div>
+   <div class="pager"><button class="btn" id="pv" ${r.page==0?'disabled':''}>‹ Prev</button><span>page ${r.page+1} of ${Math.max(1,Math.ceil(r.total/r.per))}</span><button class="btn" id="nx" ${(r.page+1)*r.per>=r.total?'disabled':''}>Next ›</button></div></div>`;
+  sortable($('#bt'));
+  const re=ch=>go('browse',{...S,...ch,page:ch.page??0});
+  let t; $('#q').oninput=e=>{clearTimeout(t);t=setTimeout(()=>re({q:e.target.value}),450)};
+  $('#ql').onchange=e=>re({quality:+e.target.value}); $('#so').onchange=e=>re({sort:e.target.value}); $('#li').onchange=e=>re({listed:e.target.checked});
+  $('#pv').onclick=()=>re({page:r.page-1}); $('#nx').onclick=()=>re({page:r.page+1});
+  if(S.q){ const q=$('#q'); q.focus(); q.setSelectionRange(q.value.length,q.value.length); }
+}
+
+// ---------- ITEM
+async function item(){
+  const d=await api('item?id='+S.id), i=d.info, m=d.metrics||{}, st=d.stats, inCmp=CMP.includes(i.item_id);
+  M.innerHTML=`<div class="crumb"><a onclick="go('browse',{cls:${i.class_id}})">${esc(i.cls)}</a> › <a onclick="go('browse',{cls:${i.class_id},sub:${i.subclass_id}})">${esc(i.sub)}</a></div>
+  <div class="panel"><h2 class="q${i.quality??1}" style="font-size:21px;margin-bottom:4px">${esc(i.name)} <small>#${i.item_id}${i.ilvl?' · item level '+i.ilvl:''}${i.stack>1?' · stacks to '+i.stack:''}</small>
+   <a style="font-size:12px;font-weight:400" id="cmpl">${inCmp?'in comparison →':'+ add to comparison'}</a></h2>
+   <div class="grid" style="margin:12px 0 0">
+    <div class="stat"><b>${money(m.current_price)}</b><span>lowest now</span></div>
+    <div class="stat"><b>${money(m.expected_rate)}</b><span>usual (2-week typical low)</span></div>
+    <div class="stat"><b>${chg(st.ch1)} · ${chg(st.ch7)}</b><span>change: 1 day · 7 days</span></div>
+    <div class="stat"><b>${money(st.all_low)} – ${money(st.all_high)}</b><span>lowest and highest seen (${st.days} days)</span></div>
+    <div class="stat"><b>${m.listings??'–'} / ${m.qty??'–'}</b><span>listings / units now${st.avg_qty!=null?' · avg '+Math.round(st.avg_qty)+' units/day':''}</span></div>
+    <div class="stat"><b>${d.vendor?money(d.vendor.unit_price):'–'} / ${i.vendor_sell?money(i.vendor_sell):'–'}</b><span>vendor buy / vendor sell${d.vendor&&d.vendor.limited?' · limited stock':''}</span></div>
+   </div></div>
+  <div class="panel"><h2>Price &amp; quantity by day ${seg('rng',[['7','7D'],['14','14D'],['30','30D'],['90','90D'],['all','All']],S.rng||'30')} ${seg('sc',[['lin','Linear'],['log','Log']],S.sc||'lin')}</h2>
+   <div class="chart" id="cDay"></div>${legend([['daily lowest','#e2b54e'],['daily highest','#5b9cf0'],['units listed (right axis)','#4fd1c5']])}</div>
+  <div class="panel" id="pScan"><h2>Every scan <small>individual scans · lowest and typical listing price, units listed</small> ${seg('scr',[['1','1D'],['3','3D'],['7','7D'],['30','30D'],['all','All']],S.scr||'3')}</h2><div class="chart" id="cScan"></div>${legend([['lowest','#e2b54e'],['typical (median) listing','#c27df0'],['units listed (right axis)','#4fd1c5']])}</div>
+  <div class="two">
+   <div class="panel"><h2>Made by</h2>${d.made_by.length?`<table><tbody>${d.made_by.map(r=>`<tr onclick="go('recipe',{id:${r.recipe_id}})"><td>${esc(r.name)}</td><td class="dim">${esc(r.profession)}</td><td class="n">${r.status=='ok'?'profit '+money(r.margin):'<span class="dim">'+esc(r.status||'')+'</span>'}</td></tr>`).join('')}</tbody></table>`:'<p class="dim">No captured recipe makes this.</p>'}</div>
+   <div class="panel"><h2>Used in <small>${d.used_in.length} recipes</small></h2>${d.used_in.length?`<div style="max-height:420px;overflow:auto"><table><tbody>${d.used_in.map(r=>`<tr onclick="go('recipe',{id:${r.recipe_id}})"><td>${iname(r.output_item,r.name,r.quality)}</td><td class="dim">${esc(r.profession)} · ×${r.qty}</td><td class="n">${r.status=='ok'?money(r.margin):'<span class="dim">'+esc(r.status||'')+'</span>'}</td></tr>`).join('')}</tbody></table></div>`:'<p class="dim">Not a reagent in any captured recipe.</p>'}</div>
+  </div>`;
+  $('#cmpl').onclick=()=>inCmp?go('compare'):addCmp(i.item_id);
+  const draw=async()=>{ const rng=S.rng||'30', lg=(S.sc||'lin')=='log'; const ser=(await getDaily([i.item_id],rng))[i.item_id]||[]; const dd=ser;
+    chart($('#cDay'),[{name:'Range',pts:dd.map(r=>[r[0],r[2]]),pts2:dd.map(r=>[r[0],r[1]]),color:'#5b9cf0',type:'band'},
+      {name:'Units listed',pts:dd.filter(r=>r[3]!=null).map(r=>[r[0],r[3]]),color:'#4fd1c5',type:'bar',axis:'r',fmt:fmtNum,opacity:.3},
+      {name:'Daily highest',pts:dd.map(r=>[r[0],r[2]]),color:'#5b9cf0',w:1.2,dash:'4 3',fmt:fmtMoney},
+      {name:'Daily lowest',pts:dd.map(r=>[r[0],r[1]]),color:'#e2b54e',w:2.4,fmt:fmtMoney}],{height:330,daily:1,right:1,log:lg}); };
+  const drawScan=async()=>{ const sc=await getScans(i.item_id,S.scr||'3');
+    if(sc.length>1){ $('#cScan').style.display=''; chart($('#cScan'),[{name:'Units listed',pts:sc.map(r=>[r.t,r.qty]),color:'#4fd1c5',type:'bar',axis:'r',fmt:fmtNum,opacity:.3},
+     {name:'Typical listing',pts:sc.map(r=>[r.t,r.median_price]),color:'#c27df0',w:1.6,fmt:fmtMoney},
+     {name:'Lowest',pts:sc.map(r=>[r.t,r.min_price]),color:'#e2b54e',w:2.2,fmt:fmtMoney}],{height:240,right:1}); }
+    else $('#cScan').innerHTML='<p class="dim">Fewer than two scans of this item in that range.</p>'; };
+  draw(); drawScan(); onSeg('rng',k=>{S.rng=k;draw()}); onSeg('sc',k=>{S.sc=k;draw()}); onSeg('scr',k=>{S.scr=k;drawScan()});
+}
+
+// ---------- COMPARE
+function addCmp(id){ if(!CMP.includes(id)){ CMP.push(id); if(CMP.length>6) CMP.shift(); lsSet('cmp',JSON.stringify(CMP)); } go('compare'); }
+function rmCmp(id){ CMP=CMP.filter(x=>x!=id); lsSet('cmp',JSON.stringify(CMP)); go('compare'); }
+async function compare(){
+  const d=CMP.length?await api('compare?ids='+CMP.join(',')):[];
+  M.innerHTML=`<div class="panel"><h2>Compare items <small>up to 6 · add with “+ compare” in Browse, on an item page, or below</small></h2>
+   <div class="ctl"><div class="gs" style="margin:0"><input id="cq" placeholder="Add an item…" autocomplete="off"><div class="sugg" id="csugg" style="left:0;right:auto"></div></div>
+   <div class="chips">${d.map((r,k)=>`<span class="chip"><span style="color:${COLORS[k]}">●</span> <a class="q${r.quality??1}" onclick="go('item',{id:${r.item_id}})">${esc(r.name)}</a><button onclick="rmCmp(${r.item_id})" title="remove">✕</button></span>`).join('')}</div></div>
+   ${d.length?`<div class="ctl">${seg('mode',[['rel','% change'],['abs','Price'],['qty','Units listed']],S.mode||'rel')} ${seg('crng',[['7','7D'],['14','14D'],['30','30D'],['90','90D'],['all','All']],S.crng||'30')}</div><div class="chart" id="cCmp"></div>
+   <p class="dim">“% change” rescales every item to 100 on the first day shown, so cheap and expensive items can be compared.</p>`:'<p class="dim">Nothing to compare yet.</p>'}</div>`;
+  suggestBox($('#cq'),$('#csugg'),r=>addCmp(r.item_id));
+  if(!d.length) return;
+  const draw=async()=>{ const mode=S.mode||'rel', rng=S.crng||'30'; const D=await getDaily(d.map(r=>r.item_id),rng);
+    const ser=d.map((r,k)=>{ const p=D[r.item_id]||[]; let pts;
+      if(mode=='qty') pts=p.filter(x=>x[3]!=null).map(x=>[x[0],x[3]]); else if(mode=='abs') pts=p.map(x=>[x[0],x[1]]); else { const b=p.length?p[0][1]:1; pts=p.map(x=>[x[0],x[1]/b*100]); }
+      return {name:r.name,pts,color:COLORS[k],w:2.2,fmt:mode=='qty'?fmtNum:mode=='abs'?fmtMoney:fmtPct}; });
+    chart($('#cCmp'),ser,{height:380,daily:1,log:mode=='abs',refY:mode=='rel'?100:null,zero:mode=='rel'?false:undefined,padL:mode=='rel'?52:78}); };
+  draw(); onSeg('mode',k=>{S.mode=k;draw()}); onSeg('crng',k=>{S.crng=k;draw()});
+}
+
+// ---------- CRAFTS / RECIPE
+async function crafts(){
+  const prof=S.prof??'', minl=S.minl??3, status=S.status??'ok';
+  const d=await api(`crafts?prof=${encodeURIComponent(prof)}&min_listings=${minl}&status=${encodeURIComponent(status)}`);
+  M.innerHTML=`<div class="panel"><div class="ctl"><label>Profession</label><select id="prof"><option value="">All</option>${d.professions.map(p=>`<option ${p==prof?'selected':''}>${esc(p)}</option>`).join('')}</select>
+   <label>Min. listings of result</label><select id="minl">${[1,3,5,10].map(n=>`<option ${n==minl?'selected':''}>${n}</option>`).join('')}</select>
+   <label>Show</label><select id="status">${[['ok','Priced crafts'],['reagent price missing','Missing a reagent price'],['output not on AH','Result not on AH']].map(([k,l])=>`<option value="${k}" ${k==status?'selected':''}>${l}</option>`).join('')}</select>
+   <span class="dim">${d.rows.length} recipes · profit after 5% AH cut</span></div>
+  <div class="scroll"><table id="ct"><thead><tr><th>Craft</th><th>Profession</th><th class="n">Sells</th><th class="n">Cost</th><th class="n">Profit</th><th class="n">Profit at usual</th><th class="n">Return</th><th class="n">Listed</th><th class="n">Trend</th><th>Result price, 14 days</th></tr></thead><tbody>
+  ${d.rows.map(r=>`<tr onclick="go('recipe',{id:${r.recipe_id}})"><td>${iname(r.output_item,r.name,r.quality)}${r.out_listings<3&&r.status=='ok'?'<span class="tag thin">thin</span>':''}${r.missing?` <span class="dim">(no price: ${esc(r.missing)})</span>`:''}</td><td class="dim">${esc(r.profession)}</td>
+   <td class="n" ${V(r.sale_price)}>${money(r.sale_price)}</td><td class="n" ${V(r.reagent_cost)}>${money(r.reagent_cost)}</td>
+   <td class="n" ${V(r.margin)}><b>${money(r.margin)}</b></td><td class="n" ${V(r.margin_expected)}>${money(r.margin_expected)}</td><td class="n" ${V(r.roi)}>${pct(r.roi)}</td><td class="n">${r.out_listings??'–'}</td>
+   <td class="n" ${V(r.slope7)}>${chg(r.slope7,'/d')}</td><td>${spark(r.spark)}</td></tr>`).join('')}
+  </tbody></table></div></div>`;
+  sortable($('#ct'));
+  $('#prof').onchange=e=>go('crafts',{prof:e.target.value,minl,status}); $('#minl').onchange=e=>go('crafts',{prof,minl:+e.target.value,status}); $('#status').onchange=e=>go('crafts',{prof,minl,status:e.target.value});
+}
+async function recipe(){
+  const d=await api('recipe?id='+S.id), r=d.recipe, m=d.margin||{};
+  M.innerHTML=`<div class="crumb"><a id="profl">${esc(r.profession)}</a> › recipe</div>
+  <div class="panel"><h2 style="font-size:19px">${esc(r.name)} <small>makes ${r.output_count??1}× ${iname(r.output_item,r.output_name||'result',r.output_quality)}</small></h2>
+   <div class="grid" style="margin:10px 0 0"><div class="stat"><b>${money(m.sale_price)}</b><span>result sells for (lowest now)</span></div><div class="stat"><b>${money(m.reagent_cost)}</b><span>reagent cost now</span></div>
+   <div class="stat"><b>${money(m.margin)}</b><span>profit after 5% cut</span></div><div class="stat"><b>${money(m.margin_expected)}</b><span>profit at usual prices</span></div><div class="stat"><b>${m.out_listings??'–'}</b><span>results listed on AH</span></div></div></div>
+  <div class="panel"><h2>Profit over time <small>from each day's lowest prices (vendor price used when cheaper)</small> ${seg('prng',[['7','7D'],['14','14D'],['30','30D'],['90','90D'],['all','All']],S.prng||'30')}</h2><div class="chart" id="cProf"></div>${legend([['sells for','#5fcf7a'],['reagent cost','#ec6f67'],['profit after cut','#e2b54e']])}</div>
+  <div class="panel"><h2>Reagents</h2><table><thead><tr><th>Reagent</th><th class="n">Qty</th><th class="n">AH lowest</th><th class="n">Usual</th><th class="n">Vendor</th><th class="n">Units on AH</th><th class="n">Trend</th><th class="n">Line cost</th></tr></thead><tbody>
+   ${d.reagents.map(x=>{const unit=[x.current_price,x.vendor_buy].filter(v=>v!=null); const u=unit.length?Math.min(...unit):null;
+     return `<tr onclick="go('item',{id:${x.item_id}})"><td>${iname(x.item_id,x.name,x.quality)}${x.vendor_buy!=null&&u==x.vendor_buy?'<span class="tag thin">vendor</span>':''}</td><td class="n">${x.qty}</td><td class="n">${money(x.current_price)}</td><td class="n">${money(x.expected_rate)}</td><td class="n">${money(x.vendor_buy)}</td><td class="n">${x.ah_qty??'–'}</td><td class="n">${chg(x.slope7,'/d')}</td><td class="n">${u==null?'<span class="err">no price</span>':money(u*x.qty)}</td></tr>`}).join('')}
+  </tbody></table></div>`;
+  $('#profl').onclick=()=>go('crafts',{prof:r.profession});
+  const drawP=async()=>{ const h=await recipeHistory(d,S.prng||'30'); chart($('#cProf'),[{name:'Profit after cut',pts:h.map(x=>[x[0],x[3]]),color:'#e2b54e',type:'area',w:2.4,fmt:fmtMoney},
+    {name:'Sells for',pts:h.map(x=>[x[0],x[1]]),color:'#5fcf7a',w:1.6,fmt:fmtMoney},{name:'Reagent cost',pts:h.map(x=>[x[0],x[2]]),color:'#ec6f67',w:1.6,fmt:fmtMoney}],{height:280,daily:1,refY:0}); };
+  drawP(); onSeg('prng',k=>{S.prng=k;drawP()});
+}
+
+// ---------- BUY IDEAS
+async function ideas(){
+  const mf=S.mf??-0.05, mp=S.mp??5000; const r=await api(`signals?max_fall=${mf}&min_price=${mp}`);
+  M.innerHTML=`<div class="panel"><h2>Buy ideas <small>below their usual price and not crashing · advisory only</small></h2>
+  <div class="ctl"><label>Hide items falling faster than</label><select id="mf">${[[-0.02,'2%/day'],[-0.05,'5%/day'],[-0.1,'10%/day'],[-9,'show all']].map(([k,l])=>`<option value="${k}" ${k==mf?'selected':''}>${l}</option>`).join('')}</select>
+   <label>Min. price</label><select id="mp">${[[100,'1s'],[5000,'50s'],[10000,'1g'],[100000,'10g']].map(([k,l])=>`<option value="${k}" ${k==mp?'selected':''}>${l}</option>`).join('')}</select><span class="dim">${r.length} items · sorted by resale gain after 5% cut</span></div>
+  <div class="scroll"><table id="st"><thead><tr><th>Item</th><th class="n">Lowest now</th><th class="n">Usual</th><th class="n">Below usual</th><th class="n">Gain if resold</th><th class="n">Listed</th><th class="n">Trend</th><th class="n">Supply vs before</th><th class="n">Volatility</th><th>14 days</th></tr></thead><tbody>
+  ${r.map(x=>`<tr onclick="go('item',{id:${x.item_id}})"><td>${iname(x.item_id,x.name,x.quality)}</td><td class="n" ${V(x.current_price)}>${money(x.current_price)}</td><td class="n" ${V(x.expected_rate)}>${money(x.expected_rate)}</td>
+   <td class="n" ${V(x.discount)}>${pct(x.discount)}</td><td class="n" ${V(x.expected_rate*0.95-x.current_price)}><b>${money(x.expected_rate*0.95-x.current_price)}</b></td><td class="n">${x.listings}</td><td class="n" ${V(x.slope7)}>${chg(x.slope7,'/d')}</td>
+   <td class="n" ${V(x.qty_ratio)}>${x.qty_ratio==null?'–':`<span class="${x.qty_ratio>1.2?'down':'dim'}">${(x.qty_ratio*100).toFixed(0)}%</span>`}</td><td class="n" ${V(x.volatility)}>${x.volatility==null?'–':(x.volatility*100).toFixed(0)+'%'}</td><td>${spark(x.spark)}</td></tr>`).join('')}
+  </tbody></table></div></div>`;
+  ideasDE(); sortable($('#st')); $('#mf').onchange=e=>go('ideas',{mf:+e.target.value,mp}); $('#mp').onchange=e=>go('ideas',{mf,mp:+e.target.value});
+}
+
+async function ideasDE(){ const rs=await api('disenchant'); if(!rs.length) return; const p=document.createElement('div'); p.className='panel';
+  p.innerHTML=`<h2>Disenchant candidates <small>buy, disenchant, sell the materials · estimates from average disenchant results · profit is after the 5% cut</small></h2>
+  <div class="scroll"><table><thead><tr><th>Item</th><th class="n">Lowest now</th><th class="n">Materials worth (est.)</th><th class="n">Est. profit</th></tr></thead><tbody>
+  ${rs.map(x=>`<tr onclick="go('item',{id:${x.item_id}})"><td>${iname(x.item_id,x.name,x.quality)}</td><td class="n">${money(x.price)}</td><td class="n">${money(x.de_value)}</td><td class="n"><b>${money(x.de_profit)}</b></td></tr>`).join('')}</tbody></table></div>`;
+  M.appendChild(p); }
+
+// ---------- WATCH
+async function watch(){
+  const w=await api('watch'); const names=Object.keys(w); const cg=x=>Math.round(x*10000);
+  if(!names.length){M.innerHTML='<div class="panel dim">No watch lists yet. Edit watchlist.json, then run import_scans.bat.</div>';return}
+  M.innerHTML=names.map(n=>{const l=w[n]; return `<div class="panel"><h2>${esc(n)} <small>compared with the lowest price in the last ${l.window_days} days</small></h2>
+   <div class="scroll"><table class="wt"><thead><tr><th>Item</th><th></th><th class="n">Lowest now</th><th class="n">30-day low</th><th class="n">Above low</th><th class="n">Typical listing</th><th class="n">Units</th><th class="n">Trend</th><th>30 days</th></tr></thead><tbody>
+   ${l.all.map(r=>{const at=r.pct_above_low<=l.near_low_pct; const tag=at?(r.still_falling?'<span class="tag wait">at low, still falling</span>':'<span class="tag">good time to buy</span>'):'';
+     return `<tr ${r.item_id?`onclick="go('item',{id:${r.item_id}})"`:''}><td>${r.item_id?iname(r.item_id,r.item,1):esc(r.item)}</td><td>${tag}${r.few_at_this_price?'<span class="tag thin">few at this price</span>':''}</td>
+     <td class="n" ${V(r.price_gold)}>${money(cg(r.price_gold))}</td><td class="n" ${V(r.month_low_gold)}>${money(cg(r.month_low_gold))}</td><td class="n" ${V(r.pct_above_low)}>${r.pct_above_low.toFixed(0)}%</td>
+     <td class="n" ${V(r.median_gold)}>${money(cg(r.median_gold))}</td><td class="n">${r.qty}</td><td class="n" ${V(r.trend_pct_per_day)}>${r.trend_pct_per_day==null?'<span class="dim">–</span>':chg(r.trend_pct_per_day/100,'/d')}</td><td>${spark(r.spark)}</td></tr>`}).join('')}
+   </tbody></table></div>${l.not_found.length?`<p class="dim">Not on the AH right now: ${l.not_found.map(esc).join(', ')}</p>`:''}</div>`}).join('');
+  document.querySelectorAll('.wt').forEach(sortable);
+}
+
+// ---------- DATA COVERAGE
+async function data(){
+  const m=await META(), days=Object.entries(m.scans_by_day), n=days.length, tot=m.scans_published;
+  const mb=b=>(b/1e6).toFixed(2)+' MB', fd=t=>t?new Date(t*1000).toLocaleString(undefined,{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'}):'–';
+  const yrs=m.growth_per_year>0?Math.max(0,(1e9-m.site_bytes)/m.growth_per_year):null;
+  M.innerHTML=`<div class="panel"><h2>Data coverage <small>what this site contains</small></h2>
+   <div class="grid" style="margin:10px 0 0">
+    <div class="stat"><b>${fd(m.first_scan)}</b><span>first scan</span></div>
+    <div class="stat"><b>${fd(m.last_scan)}</b><span>latest scan</span></div>
+    <div class="stat"><b>${tot.toLocaleString()}</b><span>individual scans kept · ${n?(tot/n).toFixed(1):0} per scanning day</span></div>
+    <div class="stat"><b>${m.items.toLocaleString()}</b><span>items known · ${m.priced.toLocaleString()} with price history</span></div>
+    <div class="stat"><b>${m.days}</b><span>days of daily history (${m.first_day||'–'} → ${m.last_day||'–'})</span></div>
+    <div class="stat"><b>${m.recipes.toLocaleString()}</b><span>recipes captured</span></div></div></div>
+  <div class="two"><div class="panel"><h2>Scans per day</h2><div class="chart" id="cSD"></div></div>
+   <div class="panel"><h2>Site size <small>compressed, counts toward GitHub's 1 GB limit</small></h2>
+    <table><thead><tr><th>Part</th><th class="n">Files</th><th class="n">Size</th></tr></thead><tbody>${Object.entries(m.groups).map(([k,g])=>`<tr><td>${esc(k)}</td><td class="n">${g.files}</td><td class="n">${mb(g.bytes)}</td></tr>`).join('')}
+    <tr><td><b>Total</b></td><td></td><td class="n"><b>${mb(m.site_bytes)}</b></td></tr></tbody></table>
+    ${yrs!=null?`<p class="dim">At the current pace the site grows roughly ${mb(m.growth_per_year)} a year, so about ${yrs.toFixed(0)} years of room remain.</p>`:''}</div></div>
+  <div class="panel"><h2>Where the numbers come from</h2><p class="dim">Prices before the first scan come from Auctionator's daily lows (from launch). After that, daily history is built from the owner's full auction house scans, and every individual scan is kept. Each scan stores, per item, the lowest listing, the typical (median) listing, units and number of listings. Nothing about sellers or players is collected. Recipes come from profession windows opened in game; craft profit is after the 5% auction house cut and ignores deposits.</p></div>`;
+  chart($('#cSD'),[{name:'Scans',pts:days.map(([d,c])=>[dayTs(d),c]),color:'#5b9cf0',type:'bar',fmt:fmtNum,opacity:.8}],{height:240,daily:1,padL:40});
+}
+
+(async function start(){ try{ await META(); await setAsof(); }catch(e){ M.innerHTML=`<div class="panel err">${esc(e.message)}</div>`; return; } const h=location.hash.slice(1).split('/'); const ok=TABS.some(x=>x[0]==h[0])||['item','recipe'].includes(h[0]);
+  go(ok?h[0]:'market',h[1]?{id:+h[1]}:{},false); history.replaceState(S,'','#'+S.tab+(S.id?'/'+S.id:'')); })();
+let RZ; window.addEventListener('resize',()=>{ clearTimeout(RZ); RZ=setTimeout(()=>{ if(['market','item','compare','recipe'].includes(S.tab)) render(); },350); });
+</script></body></html>
