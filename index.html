@@ -465,19 +465,19 @@ async function watch(){
 async function writs(){
   const j=await api('writs'), st=await staleHtml();
   if(!j.rows.length){ M.innerHTML=st+'<div class="panel dim">No writ list yet (writs.json).</div>'; return; }
-  const usual=r=>{ const it=[r.item_usual,r.craft_cost].filter(x=>x!=null); return r.writ_usual!=null&&it.length?r.writ_usual+Math.min(...it):null; };
+  const usual=r=>r.writ_usual!=null&&r.item_usual!=null?r.writ_usual+r.item_usual:null;
   const cnt=n=>n?` <span class="dim">×${n}</span>`:'';
   const head=`<thead><tr><th>Writ for</th><th>Profession</th><th class="n">Writ price</th><th class="n">Item on AH</th><th class="n">Craft cost</th><th class="n">Total</th><th class="n">Usual total</th></tr></thead>`;
   const row=r=>{ const u=usual(r);
     const writ=r.writ_price!=null?money(r.writ_price)+cnt(r.writ_listings):'<span class="dim">not listed</span>';
     const item=r.item_price!=null?money(r.item_price)+cnt(r.item_listings):'<span class="dim">not listed</span>';
     const craft=r.craft_cost!=null?money(r.craft_cost):`<span class="dim">${r.recipe_known?'reagent missing':'recipe not captured'}</span>`;
-    const tot=r.total!=null?`<b>${money(r.total)}</b>${r.how=='craft'?'<span class="tag">craft</span>':''}`:'<span class="dim">–</span>';
+    const tot=r.total!=null?`<b>${money(r.total)}</b>`:'<span class="dim">–</span>';
     return `<tr ${r.item_id?`onclick="go('item',{id:${r.item_id}})"`:''}><td>${r.item_id?iname(r.item_id,r.item,r.quality):esc(r.item)}${r.writ_id?` <a class="dim" title="the writ itself" onclick="event.stopPropagation();go('item',{id:${r.writ_id}})">(writ)</a>`:''}</td>
       <td>${esc(r.professions.join(', '))}</td><td class="n" ${V(r.writ_price)}>${writ}</td><td class="n" ${V(r.item_price)}>${item}</td><td class="n" ${V(r.craft_cost)}>${craft}</td>
       <td class="n" ${V(r.total)}>${tot}</td><td class="n" ${V(u)}>${u!=null?money(u):'<span class="dim">–</span>'}${u&&r.total?(r.total<u*0.9?'<span class="tag">below usual</span>':''):''}</td></tr>`; };
   M.innerHTML=st+`<div class="panel"><h2>Craftsman's Writs <small>one turn-in per level per day · each writ needs one of its item</small></h2>
-    <p class="dim" style="margin:0">Total = writ price + the cheaper way to get the item: buy it on the AH or craft it (reagents at the cheaper of AH or vendor price; <span class="tag">craft</span> marks crafting as cheaper). Prices are the lowest listing in the latest scan, ×N is how many are listed. Usual total uses each part's usual price. A dash means a part is missing: not listed right now, or the recipe has not been captured yet. Sorted cheapest first; click a column to re-sort.</p></div>`+
+    <p class="dim" style="margin:0">Total = writ price + item price, both bought on the AH (lowest listing in the latest scan; ×N is how many are listed). No total is shown when the writ or the item is not listed right now. Craft cost is for reference only (reagents at the cheaper of AH or vendor price) and is not part of the total. Usual total uses each part's usual price. Sorted cheapest first; click a column to re-sort.</p></div>`+
   j.levels.map(lv=>{ const rs=j.rows.filter(r=>r.level==lv).sort((a,b)=>(a.total??1e15)-(b.total??1e15)||a.item.localeCompare(b.item));
     const done=rs.filter(r=>r.total!=null), best=done[0], s=j.sealed[lv];
     return `<details class="panel wl"><summary><h2><span class="arr">▶</span>${esc(lv)} <small>${rs.length} writs · ${done.length} with a full price${best?` · cheapest today: <b>${esc(best.item)}</b> ${money(best.total)}`:''} · click to show or hide</small></h2></summary>
