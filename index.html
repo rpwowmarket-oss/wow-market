@@ -54,7 +54,7 @@ button.btn:disabled{opacity:.4;cursor:default}
 <main id="main"></main><div id="tip"></div>
 <script>
 const $=s=>document.querySelector(s), M=$('#main'), TIP=$('#tip');
-const TABS=[['market','Market'],['browse','Browse'],['crafts','Crafts'],['ideas','Buy ideas'],['watch','Watch lists'],['compare','Compare'],['data','Data coverage']];
+const TABS=[['market','Market'],['browse','Browse'],['crafts','Crafts'],['writs','Writs'],['ideas','Buy ideas'],['watch','Watch lists'],['compare','Compare'],['data','Data coverage']];
 const COLORS=['#e2b54e','#5b9cf0','#5fcf7a','#c27df0','#ec6f67','#4fd1c5'];
 function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
 function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
@@ -179,6 +179,7 @@ const API={
     return j.rows.filter(r=>r.current_price>=mp&&(r.slope7==null||r.slope7>=mf)).slice(0,150); },
   async watch(){ return gz('computed/watch.json.gz'); },
   async disenchant(){ return (await gz('computed/disenchant.json.gz')).rows; },
+  async writs(){ return gz('computed/writs.json.gz'); },
 };
 async function api(p){ const i=p.indexOf('?'), name=i<0?p:p.slice(0,i), q=new URLSearchParams(i<0?'':p.slice(i+1)); const f=API[name]; if(!f) throw new Error('Unknown data request: '+name); return f(q); }
 const STALE_H=24;
@@ -275,7 +276,7 @@ function suggestBox(input,box,onPick,onEnter){ let t, sel=-1, items=[];
   input.onblur=()=>setTimeout(()=>box.style.display='none',150); }
 suggestBox($('#gsq'),$('#sugg'),r=>go('item',{id:r.item_id}),v=>go('browse',{q:v}));
 
-async function render(){ return ({market,browse,item,crafts,recipe,ideas,watch,compare,data}[S.tab]||market)(); }
+async function render(){ return ({market,browse,item,crafts,recipe,writs,ideas,watch,compare,data}[S.tab]||market)(); }
 
 // ---------- MARKET
 async function market(){
@@ -456,6 +457,31 @@ async function watch(){
      <td class="n" ${V(r.median_gold)}>${money(cg(r.median_gold))}</td><td class="n">${r.qty}</td><td class="n" ${V(r.trend_pct_per_day)}>${r.trend_pct_per_day==null?'<span class="dim">–</span>':chg(r.trend_pct_per_day/100,'/d')}</td><td>${spark(r.spark)}</td></tr>`}).join('')}
    </tbody></table></div>${l.not_found.length?`<p class="dim">Not on the AH right now: ${l.not_found.map(esc).join(', ')}</p>`:''}</div>`}).join('');
   document.querySelectorAll('.wt').forEach(sortable);
+}
+
+// ---------- WRITS
+async function writs(){
+  const j=await api('writs'), st=await staleHtml();
+  if(!j.rows.length){ M.innerHTML=st+'<div class="panel dim">No writ list yet (writs.json).</div>'; return; }
+  const usual=r=>{ const it=[r.item_usual,r.craft_cost].filter(x=>x!=null); return r.writ_usual!=null&&it.length?r.writ_usual+Math.min(...it):null; };
+  const cnt=n=>n?` <span class="dim">×${n}</span>`:'';
+  const head=`<thead><tr><th>Writ for</th><th>Profession</th><th class="n">Writ price</th><th class="n">Item on AH</th><th class="n">Craft cost</th><th class="n">Total</th><th class="n">Usual total</th></tr></thead>`;
+  const row=r=>{ const u=usual(r);
+    const writ=r.writ_price!=null?money(r.writ_price)+cnt(r.writ_listings):'<span class="dim">not listed</span>';
+    const item=r.item_price!=null?money(r.item_price)+cnt(r.item_listings):'<span class="dim">not listed</span>';
+    const craft=r.craft_cost!=null?money(r.craft_cost):`<span class="dim">${r.recipe_known?'reagent missing':'recipe not captured'}</span>`;
+    const tot=r.total!=null?`<b>${money(r.total)}</b>${r.how=='craft'?'<span class="tag">craft</span>':''}`:'<span class="dim">–</span>';
+    return `<tr ${r.item_id?`onclick="go('item',{id:${r.item_id}})"`:''}><td>${r.item_id?iname(r.item_id,r.item,r.quality):esc(r.item)}${r.writ_id?` <a class="dim" title="the writ itself" onclick="event.stopPropagation();go('item',{id:${r.writ_id}})">(writ)</a>`:''}</td>
+      <td>${esc(r.professions.join(', '))}</td><td class="n" ${V(r.writ_price)}>${writ}</td><td class="n" ${V(r.item_price)}>${item}</td><td class="n" ${V(r.craft_cost)}>${craft}</td>
+      <td class="n" ${V(r.total)}>${tot}</td><td class="n" ${V(u)}>${u!=null?money(u):'<span class="dim">–</span>'}${u&&r.total?(r.total<u*0.9?'<span class="tag">below usual</span>':''):''}</td></tr>`; };
+  M.innerHTML=st+`<div class="panel"><h2>Craftsman's Writs <small>one turn-in per level per day · each writ needs one of its item</small></h2>
+    <p class="dim" style="margin:0">Total = writ price + the cheaper way to get the item: buy it on the AH or craft it (reagents at the cheaper of AH or vendor price; <span class="tag">craft</span> marks crafting as cheaper). Prices are the lowest listing in the latest scan, ×N is how many are listed. Usual total uses each part's usual price. A dash means a part is missing: not listed right now, or the recipe has not been captured yet. Sorted cheapest first; click a column to re-sort.</p></div>`+
+  j.levels.map(lv=>{ const rs=j.rows.filter(r=>r.level==lv).sort((a,b)=>(a.total??1e15)-(b.total??1e15)||a.item.localeCompare(b.item));
+    const done=rs.filter(r=>r.total!=null), best=done[0], s=j.sealed[lv];
+    return `<div class="panel"><h2>${esc(lv)} <small>${rs.length} writs · ${done.length} with a full price${best?` · cheapest today: <b>${esc(best.item)}</b> ${money(best.total)}`:''}</small></h2>
+      ${s?`<p class="dim" style="margin:0 0 8px">Sealed ${esc(lv)}'s Writ (a random ${esc(lv)} writ): ${s.price!=null?money(s.price)+cnt(s.listings):'not listed'}${s.usual!=null?' · usual '+money(s.usual):''} <a onclick="go('item',{id:${s.item_id}})">chart</a></p>`:''}
+      <div class="scroll"><table class="wr">${head}<tbody>${rs.map(row).join('')}</tbody></table></div></div>`; }).join('');
+  document.querySelectorAll('.wr').forEach(sortable);
 }
 
 // ---------- DATA COVERAGE
