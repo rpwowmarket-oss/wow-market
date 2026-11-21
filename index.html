@@ -48,6 +48,8 @@ button.btn:disabled{opacity:.4;cursor:default}
 .mono td{font-family:Consolas,monospace;font-size:12px}
 .scroll{overflow:auto}
 .mv{table-layout:auto}.mv td:first-child{max-width:190px;overflow:hidden;text-overflow:ellipsis}.mv td,.mv th{padding:6px 5px}
+details.wl>summary{cursor:pointer;list-style:none}details.wl>summary::-webkit-details-marker{display:none}details.wl>summary h2{margin:0}details.wl[open]>summary h2{margin-bottom:10px}
+.arr{display:inline-block;color:var(--dim);transition:transform .15s}details.wl[open] .arr{transform:rotate(90deg)}details.wl>summary:hover h2{color:var(--accent)}
 </style></head><body>
 <header><h1>⚖ Market Explorer</h1><nav id="nav"></nav><span class="asof" id="asof"></span>
 <div class="gs"><input id="gsq" type="search" placeholder="Find an item…" autocomplete="off"><div class="sugg" id="sugg"></div></div></header>
@@ -478,9 +480,9 @@ async function writs(){
     <p class="dim" style="margin:0">Total = writ price + the cheaper way to get the item: buy it on the AH or craft it (reagents at the cheaper of AH or vendor price; <span class="tag">craft</span> marks crafting as cheaper). Prices are the lowest listing in the latest scan, ×N is how many are listed. Usual total uses each part's usual price. A dash means a part is missing: not listed right now, or the recipe has not been captured yet. Sorted cheapest first; click a column to re-sort.</p></div>`+
   j.levels.map(lv=>{ const rs=j.rows.filter(r=>r.level==lv).sort((a,b)=>(a.total??1e15)-(b.total??1e15)||a.item.localeCompare(b.item));
     const done=rs.filter(r=>r.total!=null), best=done[0], s=j.sealed[lv];
-    return `<div class="panel"><h2>${esc(lv)} <small>${rs.length} writs · ${done.length} with a full price${best?` · cheapest today: <b>${esc(best.item)}</b> ${money(best.total)}`:''}</small></h2>
+    return `<details class="panel wl"><summary><h2><span class="arr">▶</span>${esc(lv)} <small>${rs.length} writs · ${done.length} with a full price${best?` · cheapest today: <b>${esc(best.item)}</b> ${money(best.total)}`:''} · click to show or hide</small></h2></summary>
       ${s?`<p class="dim" style="margin:0 0 8px">Sealed ${esc(lv)}'s Writ (a random ${esc(lv)} writ): ${s.price!=null?money(s.price)+cnt(s.listings):'not listed'}${s.usual!=null?' · usual '+money(s.usual):''} <a onclick="go('item',{id:${s.item_id}})">chart</a></p>`:''}
-      <div class="scroll"><table class="wr">${head}<tbody>${rs.map(row).join('')}</tbody></table></div></div>`; }).join('');
+      <div class="scroll"><table class="wr">${head}<tbody>${rs.map(row).join('')}</tbody></table></div></details>`; }).join('');
   document.querySelectorAll('.wr').forEach(sortable);
 }
 
