@@ -475,14 +475,31 @@ async function writs(){
     return `<tr ${r.item_id?`onclick="go('item',{id:${r.item_id}})"`:''}><td>${r.item_id?iname(r.item_id,r.item,r.quality):esc(r.item)}${r.writ_id?` <a class="dim" title="the writ itself" onclick="event.stopPropagation();go('item',{id:${r.writ_id}})">(writ)</a>`:''}</td>
       <td>${esc(r.professions.join(', '))}</td><td class="n" ${V(r.writ_price)}>${writ}</td><td class="n" ${V(r.item_price)}>${item}</td><td class="n" ${V(r.craft_cost)}>${craft}</td>
       <td class="n" ${V(r.total)}>${tot}</td><td class="n" ${V(p)}>${p!=null?`<span class="${p>0?'up':p<0?'down':'dim'}">${money(p)}</span>`:'<span class="dim">–</span>'}</td></tr>`; };
-  M.innerHTML=st+`<div class="panel"><h2>Craftsman's Writs <small>one turn-in per level per day · each writ needs one of its item</small></h2>
-    <p class="dim" style="margin:0">Total = writ price + item price, both bought on the AH (lowest listing in the latest scan; ×N is how many are listed). No total is shown when the writ or the item is not listed right now. Craft cost = reagents bought on the AH (vendor price only for reagents not on the AH) and is not part of the total. Craft profit = what the item sells for on the AH after the 5% cut, minus the craft cost; it needs the item to be listed. Sorted cheapest first; click a column to re-sort.</p></div>`+
-  j.levels.map(lv=>{ const rs=j.rows.filter(r=>r.level==lv).sort((a,b)=>(a.total??1e15)-(b.total??1e15)||a.item.localeCompare(b.item));
-    const done=rs.filter(r=>r.total!=null), best=done[0], s=j.sealed[lv];
-    return `<details class="panel wl"><summary><h2><span class="arr">▶</span>${esc(lv)} <small>${rs.length} writs · ${done.length} with a full price${best?` · cheapest today: <b>${esc(best.item)}</b> ${money(best.total)}`:''} · click to show or hide</small></h2></summary>
-      ${s?`<p class="dim" style="margin:0 0 8px">Sealed ${esc(lv)}'s Writ (a random ${esc(lv)} writ): ${s.price!=null?money(s.price)+cnt(s.listings):'not listed'}${s.usual!=null?' · usual '+money(s.usual):''} <a onclick="go('item',{id:${s.item_id}})">chart</a></p>`:''}
-      <div class="scroll"><table class="wr">${head}<tbody>${rs.map(row).join('')}</tbody></table></div></details>`; }).join('');
-  document.querySelectorAll('.wr').forEach(sortable);
+  const intro=`<div class="panel"><h2>Craftsman's Writs <small>one turn-in per level per day · each writ needs one of its item</small></h2>
+    <p class="dim" style="margin:0">Total = writ price + item price, both bought on the AH (lowest listing in the latest scan; ×N is how many are listed). No total is shown when the writ or the item is not listed right now. Craft cost = reagents bought on the AH (vendor price only for reagents not on the AH) and is not part of the total. Craft profit = what the item sells for on the AH after the 5% cut, minus the craft cost; it needs the item to be listed. Sorted cheapest first; click a column to re-sort.</p></div>`;
+  // profession filter (several can be on; remembered in this browser)
+  const profs=[...new Set(j.rows.flatMap(r=>r.professions))].sort();
+  let sel; try{ sel=JSON.parse(lsGet('writProfs')||'null'); }catch(e){}
+  sel=new Set(Array.isArray(sel)?sel.filter(p=>profs.includes(p)):[]); if(!sel.size) profs.forEach(p=>sel.add(p));
+  M.innerHTML=st+intro+`<div class="panel"><div class="ctl"><label>Professions</label><span class="seg" id="wpf"></span>
+    <span class="dim" style="font-size:12px">click one to show only it, click more to add them, "All" to reset</span></div></div><div id="wlv"></div>`;
+  const chips=()=>{ const all=sel.size==profs.length;
+    $('#wpf').innerHTML=`<button class="${all?'on':''}" data-p="*">All</button>`+profs.map(p=>`<button class="${!all&&sel.has(p)?'on':''}" data-p="${esc(p)}">${esc(p)}</button>`).join('');
+    $('#wpf').querySelectorAll('button').forEach(b=>b.onclick=()=>{ const p=b.dataset.p, all=sel.size==profs.length;
+      if(p=='*') profs.forEach(x=>sel.add(x));
+      else if(all){ sel.clear(); sel.add(p); }
+      else if(sel.has(p)){ sel.delete(p); if(!sel.size) profs.forEach(x=>sel.add(x)); }
+      else sel.add(p);
+      lsSet('writProfs',JSON.stringify([...sel])); chips(); levels(); }); };
+  const levels=()=>{ const open=new Set([...document.querySelectorAll('#wlv details[open]')].map(d=>d.dataset.lv));
+    const shown=j.rows.filter(r=>r.professions.some(p=>sel.has(p)));
+    $('#wlv').innerHTML=j.levels.map(lv=>{ const rs=shown.filter(r=>r.level==lv).sort((a,b)=>(a.total??1e15)-(b.total??1e15)||a.item.localeCompare(b.item));
+      const done=rs.filter(r=>r.total!=null), best=done[0], s=j.sealed[lv];
+      return `<details class="panel wl" data-lv="${esc(lv)}" ${open.has(lv)?'open':''}><summary><h2><span class="arr">▶</span>${esc(lv)} <small>${rs.length} writs · ${done.length} with a full price${best?` · cheapest today: <b>${esc(best.item)}</b> ${money(best.total)}`:''} · click to show or hide</small></h2></summary>
+        ${s?`<p class="dim" style="margin:0 0 8px">Sealed ${esc(lv)}'s Writ (a random ${esc(lv)} writ, any profession): ${s.price!=null?money(s.price)+cnt(s.listings):'not listed'}${s.usual!=null?' · usual '+money(s.usual):''} <a onclick="go('item',{id:${s.item_id}})">chart</a></p>`:''}
+        ${rs.length?`<div class="scroll"><table class="wr">${head}<tbody>${rs.map(row).join('')}</tbody></table></div>`:'<p class="dim">No writs of this level for the chosen professions.</p>'}</details>`; }).join('');
+    document.querySelectorAll('#wlv .wr').forEach(sortable); };
+  chips(); levels();
 }
 
 // ---------- DATA COVERAGE
