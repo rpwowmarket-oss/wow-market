@@ -55,6 +55,8 @@ details.wl>summary{cursor:pointer;list-style:none}details.wl>summary::-webkit-de
 .bf h3{margin:0 0 6px;font-size:15px;font-weight:650}.bf .d{line-height:1.55}.bf pre{background:#0d0f12;border:1px solid var(--line);border-radius:6px;padding:8px 10px;margin:8px 0;overflow-x:auto;font:12.5px/1.4 Consolas,"Cascadia Mono",monospace;white-space:pre}
 .bf code{background:#0d0f12;padding:1px 5px;border-radius:4px;font:12.5px Consolas,monospace}.bf .fn{font-weight:650;margin:10px 0 2px}.bf .ft{color:var(--dim);font-size:12px;margin-top:10px}
 .bnote{color:var(--dim);font-size:12.5px;margin:0 0 12px}
+.mv{display:inline-block;font-size:11px;padding:1px 7px;border-radius:10px;white-space:nowrap;font-weight:400}.mv small{opacity:.7;font-size:10px}
+.mv-Fast{background:#263a2a;color:var(--good)}.mv-Steady{background:#25323f;color:#8cc4ff}.mv-Slow{background:#3a3424;color:#e2c46e}.mv-Stale{background:#3a2626;color:var(--bad)}.mv-Unknown{background:#2a2d33;color:var(--dim)}
 </style></head><body>
 <header><h1>⚖ Market Explorer</h1><nav id="nav"></nav><span class="asof" id="asof"></span>
 <div class="gs"><input id="gsq" type="search" placeholder="Find an item…" autocomplete="off"><div class="sugg" id="sugg"></div></div></header>
@@ -105,6 +107,25 @@ let _MET; function MET(){ return _MET||(_MET=(async()=>{
   for(const [id,row] of Object.entries(j.stats)){ const o={}; j.stat_cols.forEach((c,k)=>o[c]=row[k]); stat.set(+id,o); }
   return {met,stat}; })()); }
 let _CR; function CR(){ return _CR||(_CR=(async()=>{ const j=await gz('computed/crafts.json.gz'); return {professions:j.professions,rows:j.rows,by:new Map(j.rows.map(r=>[r.recipe_id,r]))}; })()); }
+let _MV; function MV(){ return _MV||(_MV=(async()=>{ const j=await gz('computed/movement.json.gz'), by=new Map();
+  for(const [id,r] of Object.entries(j.rows||{})) by.set(+id,Object.fromEntries(j.cols.map((c,k)=>[c,r[k]]))); return {meta:j.meta,by}; })().catch(()=>({meta:null,by:new Map()}))); }
+const MV_RANK={Fast:5,Steady:4,Slow:3,Stale:2,Unknown:1};
+const mvNum=x=>x==null?'–':(x>=100?Math.round(x).toLocaleString():x>=10?x.toFixed(0):x.toFixed(1));
+function mvTag(m){ if(!m) return '<span class="dim">–</span>';
+  return `<span class="mv mv-${esc(m.tier)}" title="${esc(m.tier)} · confidence ${m.confidence}/100${m.sold_per_day!=null?' · about '+mvNum(m.sold_per_day)+' sold per day':''} (estimate)">${esc(m.tier)} <small>${m.confidence}</small></span>`; }
+const mvRank=m=>m?MV_RANK[m.tier]*1000+m.confidence:'';
+function mvPanel(m,meta){
+  const h=meta&&meta.covered_h!=null?` · ${Math.round(meta.covered_h)} hours of scans over ${(+meta.listing_days).toFixed(1)} days`:'';
+  const head=`<h2>How fast it sells <small>estimate · last 14 days${h}</small></h2>`;
+  if(!m) return `<div class="panel">${head}<p class="dim" style="margin:0">No movement estimate yet: this item was not on the AH during the scans that record individual listings.</p></div>`;
+  return `<div class="panel">${head}<div class="grid" style="margin:4px 0 0">
+    <div class="stat"><b>${mvTag(m)}</b><span>movement tier · confidence ${m.confidence}/100</span></div>
+    <div class="stat"><b>${mvNum(m.sold_per_day)}</b><span>units sold per day (est.)</span></div>
+    <div class="stat"><b>${m.days_of_stock==null?'–':mvNum(m.days_of_stock)+' days'}</b><span>to sell the ${m.cur_qty??0} units listed now</span></div>
+    <div class="stat"><b>${m.sell_through==null?'–':pct(m.sell_through)}</b><span>sell-through (sold ÷ units on offer)</span></div>
+    <div class="stat"><b>${m.churn==null?'–':pct(m.churn)}</b><span>of listings that vanished were cancels</span></div>
+    <div class="stat"><b>${m.events}</b><span>listings seen vanishing · ${mvNum(m.certain_units)} units certainly bought</span></div></div>
+   <p class="dim" style="margin:10px 0 0;font-size:12px">How it is worked out: a listing that vanished with more time left than the gap between two scans cannot have expired, so it was sold or cancelled. For stackable goods buyers always get the cheapest units first, so a listing that vanished while cheaper ones stayed was cancelled, not bought; a stack that got smaller is a certain sale. Gear is bought by choice rather than by price, so gear estimates are rougher. Sales are scaled to a day from the hours actually scanned, which lean toward busy evening hours. Fast = the units listed now would sell in about a day or less, Steady = up to 3 days, Slow = up to 10, Stale = longer or no sales seen. Confidence stays low while there are only a few days of data.</p></div>`; }
 const mgSort=(a,b)=>(b==null?-1e12:b)-(a==null?-1e12:a);
 
 // Daily series for some items over the last `rng` days ('all' = everything). Loads only the monthly files needed.
@@ -336,6 +357,7 @@ function catBars(el,cats){ const W=el.clientWidth||600, rowH=26, H=cats.length*r
 
 // ---------- BROWSE
 async function browse(){
+  const mvd=await MV();
   const [cats,r]=await Promise.all([api('categories'),api('browse?'+new URLSearchParams({q:S.q||'',class:S.cls??'',sub:S.sub??'',quality:S.quality??-1,listed:S.listed===false?0:1,sort:S.sort||'listings',page:S.page||0}))]);
   const hasCat=S.cls!=null&&S.cls!=='';
   const cur=hasCat?cats.find(c=>String(c.class_id)===String(S.cls)):null; const subn=cur&&S.sub!=null&&S.sub!==''?cur.subs.find(s=>String(s.subclass_id)===String(S.sub)):null;
@@ -346,10 +368,10 @@ async function browse(){
     <label>Quality</label><select id="ql">${[[-1,'Any'],[0,'Poor+'],[1,'Common+'],[2,'Uncommon+'],[3,'Rare+'],[4,'Epic+']].map(([k,l])=>`<option value="${k}" ${String(S.quality??-1)==String(k)?'selected':''}>${l}</option>`).join('')}</select>
     <label>Sort</label><select id="so">${[['listings','Most listed'],['qty','Most units'],['price','Price'],['ch7','Rising (7 days)'],['ch7a','Falling (7 days)'],['ilvl','Item level'],['name','Name']].map(([k,l])=>`<option value="${k}" ${(S.sort||'listings')==k?'selected':''}>${l}</option>`).join('')}</select>
     <label><input type="checkbox" id="li" ${S.listed===false?'':'checked'}> on AH now</label><span class="dim">${r.total.toLocaleString()} items</span></div>
-   <div class="scroll"><table id="bt"><thead><tr><th>Item</th><th>Type</th><th class="n">ilvl</th><th class="n">Lowest now</th><th class="n">Usual</th><th class="n">Listings</th><th class="n">Units</th><th class="n">1 day</th><th class="n">7 days</th><th>14 days</th><th></th></tr></thead><tbody>
+   <div class="scroll"><table id="bt"><thead><tr><th>Item</th><th>Type</th><th class="n">ilvl</th><th class="n">Lowest now</th><th class="n">Usual</th><th class="n">Listings</th><th class="n">Units</th><th class="n">1 day</th><th class="n">7 days</th><th title="How fast it sells: estimate with confidence 0-100">Sells</th><th>14 days</th><th></th></tr></thead><tbody>
    ${r.rows.map(x=>`<tr onclick="go('item',{id:${x.item_id}})"><td>${iname(x.item_id,x.name,x.quality)}</td><td class="dim">${esc(x.sub)}</td><td class="n">${x.ilvl??''}</td>
     <td class="n" ${V(x.price)}>${money(x.price)}</td><td class="n" ${V(x.usual)}>${money(x.usual)}</td><td class="n">${x.listings??'–'}</td><td class="n">${x.qty??'–'}</td>
-    <td class="n" ${V(x.ch1)}>${chg(x.ch1)}</td><td class="n" ${V(x.ch7)}>${chg(x.ch7)}</td><td>${spark(x.spark)}</td>
+    <td class="n" ${V(x.ch1)}>${chg(x.ch1)}</td><td class="n" ${V(x.ch7)}>${chg(x.ch7)}</td><td ${V(mvRank(mvd.by.get(x.item_id)))}>${mvTag(mvd.by.get(x.item_id))}</td><td>${spark(x.spark)}</td>
     <td><a title="Add to comparison" onclick="event.stopPropagation();addCmp(${x.item_id})">+ compare</a></td></tr>`).join('')}</tbody></table></div>
    <div class="pager"><button class="btn" id="pv" ${r.page==0?'disabled':''}>‹ Prev</button><span>page ${r.page+1} of ${Math.max(1,Math.ceil(r.total/r.per))}</span><button class="btn" id="nx" ${(r.page+1)*r.per>=r.total?'disabled':''}>Next ›</button></div></div>`;
   sortable($('#bt'));
@@ -362,7 +384,7 @@ async function browse(){
 
 // ---------- ITEM
 async function item(){
-  const d=await api('item?id='+S.id), i=d.info, m=d.metrics||{}, st=d.stats, inCmp=CMP.includes(i.item_id);
+  const d=await api('item?id='+S.id), i=d.info, m=d.metrics||{}, st=d.stats, inCmp=CMP.includes(i.item_id), mvd=await MV();
   M.innerHTML=`<div class="crumb"><a onclick="go('browse',{cls:${i.class_id}})">${esc(i.cls)}</a> › <a onclick="go('browse',{cls:${i.class_id},sub:${i.subclass_id}})">${esc(i.sub)}</a></div>
   <div class="panel"><h2 class="q${i.quality??1}" style="font-size:21px;margin-bottom:4px">${esc(i.name)} <small>#${i.item_id}${i.ilvl?' · item level '+i.ilvl:''}${i.stack>1?' · stacks to '+i.stack:''}</small>
    <a style="font-size:12px;font-weight:400" id="cmpl">${inCmp?'in comparison →':'+ add to comparison'}</a></h2>
@@ -374,6 +396,7 @@ async function item(){
     <div class="stat"><b>${m.listings??'–'} / ${m.qty??'–'}</b><span>listings / units now${st.avg_qty!=null?' · avg '+Math.round(st.avg_qty)+' units/day':''}</span></div>
     <div class="stat"><b>${d.vendor?money(d.vendor.unit_price):'–'} / ${i.vendor_sell?money(i.vendor_sell):'–'}</b><span>vendor buy / vendor sell${d.vendor&&d.vendor.limited?' · limited stock':''}</span></div>
    </div></div>
+  ${mvPanel(mvd.by.get(i.item_id),mvd.meta)}
   <div class="panel"><h2>Price &amp; quantity by day ${seg('rng',[['7','7D'],['14','14D'],['30','30D'],['90','90D'],['all','All']],S.rng||'30')} ${seg('sc',[['lin','Linear'],['log','Log']],S.sc||'lin')}</h2>
    <div class="chart" id="cDay"></div>${legend([['daily lowest','#e2b54e'],['daily highest','#5b9cf0'],['units listed (right axis)','#4fd1c5']])}</div>
   <div class="panel" id="pScan"><h2>Every scan <small>individual scans · lowest and typical listing price, units listed</small> ${seg('scr',[['1','1D'],['3','3D'],['7','7D'],['30','30D'],['all','All']],S.scr||'3')}</h2><div class="chart" id="cScan"></div>${legend([['lowest','#e2b54e'],['typical (median) listing','#c27df0'],['units listed (right axis)','#4fd1c5']])}</div>
@@ -451,13 +474,13 @@ async function recipe(){
 
 // ---------- BUY IDEAS
 async function ideas(){
-  const mf=S.mf??-0.05, mp=S.mp??5000; const r=await api(`signals?max_fall=${mf}&min_price=${mp}`);
+  const mf=S.mf??-0.05, mp=S.mp??5000; const r=await api(`signals?max_fall=${mf}&min_price=${mp}`), mvd=await MV();
   M.innerHTML=`<div class="panel"><h2>Buy ideas <small>below their usual price and not crashing · advisory only</small></h2>
   <div class="ctl"><label>Hide items falling faster than</label><select id="mf">${[[-0.02,'2%/day'],[-0.05,'5%/day'],[-0.1,'10%/day'],[-9,'show all']].map(([k,l])=>`<option value="${k}" ${k==mf?'selected':''}>${l}</option>`).join('')}</select>
-   <label>Min. price</label><select id="mp">${[[100,'1s'],[5000,'50s'],[10000,'1g'],[100000,'10g']].map(([k,l])=>`<option value="${k}" ${k==mp?'selected':''}>${l}</option>`).join('')}</select><span class="dim">${r.length} items · sorted by resale gain after 5% cut</span></div>
-  <div class="scroll"><table id="st"><thead><tr><th>Item</th><th class="n">Lowest now</th><th class="n">Usual</th><th class="n">Below usual</th><th class="n">Gain if resold</th><th class="n">Listed</th><th class="n">Trend</th><th class="n">Supply vs before</th><th class="n">Volatility</th><th>14 days</th></tr></thead><tbody>
+   <label>Min. price</label><select id="mp">${[[100,'1s'],[5000,'50s'],[10000,'1g'],[100000,'10g']].map(([k,l])=>`<option value="${k}" ${k==mp?'selected':''}>${l}</option>`).join('')}</select><span class="dim">${r.length} items · sorted by resale gain after 5% cut · "Sells" is an estimate: check it before buying to resell</span></div>
+  <div class="scroll"><table id="st"><thead><tr><th>Item</th><th class="n">Lowest now</th><th class="n">Usual</th><th class="n">Below usual</th><th class="n">Gain if resold</th><th class="n">Listed</th><th title="How fast it sells: estimate with confidence 0-100">Sells</th><th class="n">Trend</th><th class="n">Supply vs before</th><th class="n">Volatility</th><th>14 days</th></tr></thead><tbody>
   ${r.map(x=>`<tr onclick="go('item',{id:${x.item_id}})"><td>${iname(x.item_id,x.name,x.quality)}</td><td class="n" ${V(x.current_price)}>${money(x.current_price)}</td><td class="n" ${V(x.expected_rate)}>${money(x.expected_rate)}</td>
-   <td class="n" ${V(x.discount)}>${pct(x.discount)}</td><td class="n" ${V(x.expected_rate*0.95-x.current_price)}><b>${money(x.expected_rate*0.95-x.current_price)}</b></td><td class="n">${x.listings}</td><td class="n" ${V(x.slope7)}>${chg(x.slope7,'/d')}</td>
+   <td class="n" ${V(x.discount)}>${pct(x.discount)}</td><td class="n" ${V(x.expected_rate*0.95-x.current_price)}><b>${money(x.expected_rate*0.95-x.current_price)}</b></td><td class="n">${x.listings}</td><td ${V(mvRank(mvd.by.get(x.item_id)))}>${mvTag(mvd.by.get(x.item_id))}</td><td class="n" ${V(x.slope7)}>${chg(x.slope7,'/d')}</td>
    <td class="n" ${V(x.qty_ratio)}>${x.qty_ratio==null?'–':`<span class="${x.qty_ratio>1.2?'down':'dim'}">${(x.qty_ratio*100).toFixed(0)}%</span>`}</td><td class="n" ${V(x.volatility)}>${x.volatility==null?'–':(x.volatility*100).toFixed(0)+'%'}</td><td>${spark(x.spark)}</td></tr>`).join('')}
   </tbody></table></div></div>`;
   ideasDE(); sortable($('#st')); $('#mf').onchange=e=>go('ideas',{mf:+e.target.value,mp}); $('#mp').onchange=e=>go('ideas',{mf,mp:+e.target.value});
@@ -485,13 +508,13 @@ async function watch(){
 
 // ---------- WRITS
 async function writs(){
-  const j=await api('writs'), st=await staleHtml();
+  const j=await api('writs'), st=await staleHtml(), mvd=await MV();
   if(!j.rows.length){ M.innerHTML=st+'<div class="panel dim">No writ list yet (writs.json).</div>'; return; }
   const cnt=n=>n?` <span class="dim">×${n}</span>`:'';
   const head=`<thead><tr><th>Writ for</th><th>Profession</th><th class="n">Writ price</th><th class="n">Item on AH</th><th class="n">Craft cost (AH mats)</th><th class="n">Total</th><th class="n">Craft profit</th></tr></thead>`;
   const row=r=>{ const p=r.craft_profit;
     const writ=r.writ_price!=null?money(r.writ_price)+cnt(r.writ_listings):'<span class="dim">not listed</span>';
-    const item=r.item_price!=null?money(r.item_price)+cnt(r.item_listings):'<span class="dim">not listed</span>';
+    const item=(r.item_price!=null?money(r.item_price)+cnt(r.item_listings):'<span class="dim">not listed</span>')+(r.item_id&&mvd.by.get(r.item_id)?' '+mvTag(mvd.by.get(r.item_id)):'');
     const craft=r.craft_cost!=null?money(r.craft_cost):`<span class="dim">${r.recipe_known?'reagent missing':'recipe not captured'}</span>`;
     const tot=r.total!=null?`<b>${money(r.total)}</b>`:'<span class="dim">–</span>';
     return `<tr ${r.item_id?`onclick="go('item',{id:${r.item_id}})"`:''}><td>${r.item_id?iname(r.item_id,r.item,r.quality):esc(r.item)}${r.writ_id?` <a class="dim" title="the writ itself" onclick="event.stopPropagation();go('item',{id:${r.writ_id}})">(writ)</a>`:''}</td>
