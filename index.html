@@ -57,7 +57,10 @@ details.wl>summary{cursor:pointer;list-style:none}details.wl>summary::-webkit-de
 .bnote{color:var(--dim);font-size:12.5px;margin:0 0 12px}
 .mv{display:inline-block;font-size:11px;padding:1px 7px;border-radius:10px;white-space:nowrap;font-weight:400}.mv small{opacity:.7;font-size:10px}
 .mv-Fast{background:#263a2a;color:var(--good)}.mv-Steady{background:#25323f;color:#8cc4ff}.mv-Slow{background:#3a3424;color:#e2c46e}.mv-Stale{background:#3a2626;color:var(--bad)}.mv-Unknown{background:#2a2d33;color:var(--dim)}
-</style></head><body>
+</style>
+<script>const whTooltips={colorLinks:false,iconizeLinks:false,renameLinks:false};</script>
+<script src="https://wow.zamimg.com/js/tooltips.js" async></script>
+</head><body>
 <header><h1>⚖ Market Explorer</h1><nav id="nav"></nav><span class="asof" id="asof"></span>
 <div class="gs"><input id="gsq" type="search" placeholder="Find an item…" autocomplete="off"><div class="sugg" id="sugg"></div></div></header>
 <main id="main"></main><div id="tip"></div>
@@ -224,11 +227,13 @@ function money(c,plain){ if(c==null||isNaN(c)) return plain?'–':'<span class="
   if(g) o.push(g.toLocaleString()+G); if(s&&g<1000) o.push(s+Sx); if((cc&&g<10)||!o.length) o.push(cc+C); return (neg?'−':'')+o.join(' '); }
 const pct=(x,d=0)=>x==null?'<span class="dim">–</span>':(x*100).toFixed(d)+'%';
 function chg(x,suf=''){ if(x==null) return '<span class="dim">–</span>'; const v=x*100; return `<span class="${v>1?'up':v<-1?'down':'dim'}">${v>0?'+':''}${Math.abs(v)>=100?v.toFixed(0):v.toFixed(1)}%${suf}</span>`; }
-const iname=(id,name,q)=>`<a class="q${q??1}" onclick="event.stopPropagation();go('item',{id:${id}})">${esc(name||('item '+id))}</a>`;
+const WH_ATTR=id=>`data-wowhead="item=${+id}&amp;domain=forever"`;   // Wowhead in-game tooltip on hover (Forever data)
+function whHide(){ try{ if(window.WH&&WH.Tooltip&&WH.Tooltip.hide) WH.Tooltip.hide(); }catch(e){} try{ if(window.$WowheadPower&&$WowheadPower.hideTooltip) $WowheadPower.hideTooltip(); }catch(e){} }
+const iname=(id,name,q)=>`<a class="q${q??1}" ${WH_ATTR(id)} onclick="event.stopPropagation();go('item',{id:${id}})">${esc(name||('item '+id))}</a>`;
 const ago=t=>{const m=Math.round((Date.now()/1000-t)/60); return m<60?m+' min ago':m<1440?(m/60).toFixed(1)+' h ago':(m/1440).toFixed(1)+' days ago'};
 const V=v=>`data-v="${v??''}"`;
 function nav(){ $('#nav').innerHTML=TABS.map(([k,l])=>`<button class="${S.tab==k?'on':''}" onclick="go('${k}')">${l}</button>`).join(''); }
-function go(t,extra,push=true){ S={tab:t,...(extra||{})}; if(push) history.pushState(S,'','#'+t+(S.id?'/'+S.id:S.file?'/'+encodeURIComponent(S.file):'')); nav(); TIP.style.display='none';
+function go(t,extra,push=true){ S={tab:t,...(extra||{})}; if(push) history.pushState(S,'','#'+t+(S.id?'/'+S.id:S.file?'/'+encodeURIComponent(S.file):'')); nav(); TIP.style.display='none'; whHide();
   M.innerHTML='<p class="dim">Loading…</p>'; render().catch(e=>M.innerHTML=`<div class="panel err">${esc(e.message)}</div>`); window.scrollTo(0,0); }
 window.onpopstate=e=>{ if(e.state) go(e.state.tab,e.state,false); };
 function sortable(tbl){ if(!tbl) return; tbl.querySelectorAll('th').forEach((th,i)=>th.onclick=()=>{ const tb=tbl.tBodies[0], rs=[...tb.rows];
@@ -387,7 +392,8 @@ async function item(){
   const d=await api('item?id='+S.id), i=d.info, m=d.metrics||{}, st=d.stats, inCmp=CMP.includes(i.item_id), mvd=await MV();
   M.innerHTML=`<div class="crumb"><a onclick="go('browse',{cls:${i.class_id}})">${esc(i.cls)}</a> › <a onclick="go('browse',{cls:${i.class_id},sub:${i.subclass_id}})">${esc(i.sub)}</a></div>
   <div class="panel"><h2 class="q${i.quality??1}" style="font-size:21px;margin-bottom:4px">${esc(i.name)} <small>#${i.item_id}${i.ilvl?' · item level '+i.ilvl:''}${i.stack>1?' · stacks to '+i.stack:''}</small>
-   <a style="font-size:12px;font-weight:400" id="cmpl">${inCmp?'in comparison →':'+ add to comparison'}</a></h2>
+   <a style="font-size:12px;font-weight:400" id="cmpl">${inCmp?'in comparison →':'+ add to comparison'}</a>
+   <a style="font-size:12px;font-weight:400" href="https://www.wowhead.com/forever/item=${i.item_id}" target="_blank" rel="noopener" ${WH_ATTR(i.item_id)}>Wowhead ↗</a></h2>
    <div class="grid" style="margin:12px 0 0">
     <div class="stat"><b>${money(m.current_price)}</b><span>lowest now</span></div>
     <div class="stat"><b>${money(m.expected_rate)}</b><span>usual (2-week typical low)</span></div>
@@ -425,7 +431,7 @@ async function compare(){
   const d=CMP.length?await api('compare?ids='+CMP.join(',')):[];
   M.innerHTML=`<div class="panel"><h2>Compare items <small>up to 6 · add with “+ compare” in Browse, on an item page, or below</small></h2>
    <div class="ctl"><div class="gs" style="margin:0"><input id="cq" placeholder="Add an item…" autocomplete="off"><div class="sugg" id="csugg" style="left:0;right:auto"></div></div>
-   <div class="chips">${d.map((r,k)=>`<span class="chip"><span style="color:${COLORS[k]}">●</span> <a class="q${r.quality??1}" onclick="go('item',{id:${r.item_id}})">${esc(r.name)}</a><button onclick="rmCmp(${r.item_id})" title="remove">✕</button></span>`).join('')}</div></div>
+   <div class="chips">${d.map((r,k)=>`<span class="chip"><span style="color:${COLORS[k]}">●</span> <a class="q${r.quality??1}" ${WH_ATTR(r.item_id)} onclick="go('item',{id:${r.item_id}})">${esc(r.name)}</a><button onclick="rmCmp(${r.item_id})" title="remove">✕</button></span>`).join('')}</div></div>
    ${d.length?`<div class="ctl">${seg('mode',[['rel','% change'],['abs','Price'],['qty','Units listed']],S.mode||'rel')} ${seg('crng',[['7','7D'],['14','14D'],['30','30D'],['90','90D'],['all','All']],S.crng||'30')}</div><div class="chart" id="cCmp"></div>
    <p class="dim">“% change” rescales every item to 100 on the first day shown, so cheap and expensive items can be compared.</p>`:'<p class="dim">Nothing to compare yet.</p>'}</div>`;
   suggestBox($('#cq'),$('#csugg'),r=>addCmp(r.item_id));
@@ -517,7 +523,7 @@ async function writs(){
     const item=(r.item_price!=null?money(r.item_price)+cnt(r.item_listings):'<span class="dim">not listed</span>')+(r.item_id&&mvd.by.get(r.item_id)?' '+mvTag(mvd.by.get(r.item_id)):'');
     const craft=r.craft_cost!=null?money(r.craft_cost):`<span class="dim">${r.recipe_known?'reagent missing':'recipe not captured'}</span>`;
     const tot=r.total!=null?`<b>${money(r.total)}</b>`:'<span class="dim">–</span>';
-    return `<tr ${r.item_id?`onclick="go('item',{id:${r.item_id}})"`:''}><td>${r.item_id?iname(r.item_id,r.item,r.quality):esc(r.item)}${r.writ_id?` <a class="dim" title="the writ itself" onclick="event.stopPropagation();go('item',{id:${r.writ_id}})">(writ)</a>`:''}</td>
+    return `<tr ${r.item_id?`onclick="go('item',{id:${r.item_id}})"`:''}><td>${r.item_id?iname(r.item_id,r.item,r.quality):esc(r.item)}${r.writ_id?` <a class="dim" title="the writ itself" ${WH_ATTR(r.writ_id)} onclick="event.stopPropagation();go('item',{id:${r.writ_id}})">(writ)</a>`:''}</td>
       <td>${esc(r.professions.join(', '))}</td><td class="n" ${V(r.writ_price)}>${writ}</td><td class="n" ${V(r.item_price)}>${item}</td><td class="n" ${V(r.craft_cost)}>${craft}</td>
       <td class="n" ${V(r.total)}>${tot}</td><td class="n" ${V(p)}>${p!=null?`<span class="${p>0?'up':p<0?'down':'dim'}">${money(p)}</span>`:'<span class="dim">–</span>'}</td></tr>`; };
   const intro=`<div class="panel"><h2>Craftsman's Writs <small>one turn-in per level per day · each writ needs one of its item</small></h2>
