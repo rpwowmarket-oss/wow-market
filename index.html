@@ -449,20 +449,57 @@ async function compare(){
 
 // ---------- CRAFTS / RECIPE
 async function crafts(){
-  const prof=S.prof??'', minl=S.minl??3, status=S.status??'ok';
-  const d=await api(`crafts?prof=${encodeURIComponent(prof)}&min_listings=${minl}&status=${encodeURIComponent(status)}`);
-  M.innerHTML=`<div class="panel"><div class="ctl"><label>Profession</label><select id="prof"><option value="">All</option>${d.professions.map(p=>`<option ${p==prof?'selected':''}>${esc(p)}</option>`).join('')}</select>
-   <label>Min. listings of result</label><select id="minl">${[1,3,5,10].map(n=>`<option ${n==minl?'selected':''}>${n}</option>`).join('')}</select>
-   <label>Show</label><select id="status">${[['ok','Priced crafts'],['reagent price missing','Missing a reagent price'],['output not on AH','Result not on AH']].map(([k,l])=>`<option value="${k}" ${k==status?'selected':''}>${l}</option>`).join('')}</select>
-   <span class="dim">${d.rows.length} recipes · profit after 5% AH cut</span></div>
-  <div class="scroll"><table id="ct"><thead><tr><th>Craft</th><th>Profession</th><th class="n">Sells</th><th class="n">Cost</th><th class="n">Profit</th><th class="n">Profit at usual</th><th class="n">Return</th><th class="n">Listed</th><th class="n">Trend</th><th>Result price, 14 days</th></tr></thead><tbody>
-  ${d.rows.map(r=>`<tr onclick="go('recipe',{id:${r.recipe_id}})"><td>${iname(r.output_item,r.name,r.quality)}${r.out_listings<3&&r.status=='ok'?'<span class="tag thin">thin</span>':''}${r.missing?` <span class="dim">(no price: ${esc(r.missing)})</span>`:''}</td><td class="dim">${esc(r.profession)}</td>
-   <td class="n" ${V(r.sale_price)}>${money(r.sale_price)}</td><td class="n" ${V(r.reagent_cost)}>${money(r.reagent_cost)}</td>
-   <td class="n" ${V(r.margin)}><b>${money(r.margin)}</b></td><td class="n" ${V(r.margin_expected)}>${money(r.margin_expected)}</td><td class="n" ${V(r.roi)}>${pct(r.roi)}</td><td class="n">${r.out_listings??'–'}</td>
-   <td class="n" ${V(r.slope7)}>${chg(r.slope7,'/d')}</td><td>${spark(r.spark)}</td></tr>`).join('')}
-  </tbody></table></div></div>`;
-  sortable($('#ct'));
-  $('#prof').onchange=e=>go('crafts',{prof:e.target.value,minl,status}); $('#minl').onchange=e=>go('crafts',{prof,minl:+e.target.value,status}); $('#status').onchange=e=>go('crafts',{prof,minl,status:e.target.value});
+  // Views: best overall (profit per day you could make), most profit (per craft), fastest sellers (movement of the result)
+  const view=S.view||'best', minl=S.minl??3, status=S.status??'ok', cap=S.cap??3, onlyProfit=S.op!==false;
+  const [cr,mvd]=await Promise.all([CR(),MV()]);
+  const profs=cr.professions.slice();
+  let sel; try{ sel=JSON.parse(lsGet('craftProfs')||'null'); }catch(e){}
+  if(S.prof) sel=[S.prof];                                   // links from recipe pages pick one profession
+  sel=new Set(Array.isArray(sel)?sel.filter(p=>profs.includes(p)):[]); if(!sel.size) profs.forEach(p=>sel.add(p));
+  const all=()=>sel.size==profs.length;
+  const perItem=r=>r.margin==null?null:r.margin/(r.output_count||1);
+  const rowsFor=()=>{ let rs=cr.rows.filter(r=>r.status===status&&sel.has(r.profession)&&(status!=='ok'||(r.out_listings||0)>=minl));
+    rs=rs.map(r=>{ const m=mvd.by.get(r.output_item), spd=m?m.sold_per_day:null, pi=perItem(r);
+      const yours=spd==null?0:(cap>0?Math.min(spd,cap):spd);
+      return {...r,mv:m,spd,per_item:pi,per_day:pi!=null&&pi>0&&yours>0?pi*yours:null}; });
+    if(status==='ok'&&onlyProfit) rs=rs.filter(r=>(r.margin||0)>0);
+    const by={best:(a,b)=>(b.per_day??-1e15)-(a.per_day??-1e15)||(b.margin??-1e15)-(a.margin??-1e15),
+              profit:(a,b)=>(b.margin??-1e15)-(a.margin??-1e15),
+              fast:(a,b)=>((b.mv?MV_RANK[b.mv.tier]:0)-(a.mv?MV_RANK[a.mv.tier]:0))||((b.spd??-1)-(a.spd??-1))||((b.margin??-1e15)-(a.margin??-1e15))}[view];
+    return rs.sort(by).slice(0,500); };
+  const segv=(id,opts,cur)=>`<span class="seg" id="${id}">${opts.map(([k,l])=>`<button class="${String(k)==String(cur)?'on':''}" data-v="${k}">${l}</button>`).join('')}</span>`;
+  const sub={best:'ranked by estimated profit per day: profit per item × how many you could sell a day (the market\'s estimated daily sales, up to your limit)',
+             profit:'ranked by profit per craft after the 5% AH cut',
+             fast:'ranked by how fast the result sells (movement tier, then estimated units sold per day)'}[view];
+  M.innerHTML=`<div class="panel"><h2>Crafts <small>${sub}</small></h2>
+   <div class="ctl" style="margin-bottom:8px"><label>Professions</label><span class="seg" id="cpf"></span><span class="dim" style="font-size:12px">click one to show only it, click more to add them</span></div>
+   <div class="ctl"><label>Rank by</label>${segv('cvw',[['best','Best overall'],['profit','Most profit'],['fast','Fastest sellers']],view)}
+    <label title="How many of one item you think you can sell per day; caps the profit-per-day estimate">You sell up to</label><select id="cap">${[[1,'1/day'],[3,'3/day'],[5,'5/day'],[10,'10/day'],[0,'no limit']].map(([k,l])=>`<option value="${k}" ${k==cap?'selected':''}>${l}</option>`).join('')}</select>
+    <label>Min. listings of result</label><select id="minl">${[1,3,5,10].map(n=>`<option ${n==minl?'selected':''}>${n}</option>`).join('')}</select>
+    <label>Show</label><select id="status">${[['ok','Priced crafts'],['reagent price missing','Missing a reagent price'],['output not on AH','Result not on AH']].map(([k,l])=>`<option value="${k}" ${k==status?'selected':''}>${l}</option>`).join('')}</select>
+    <label><input type="checkbox" id="op" ${onlyProfit?'checked':''}> only profitable</label><span class="dim" id="cn"></span></div></div>
+   <div class="panel"><div class="scroll" id="cwrap"></div>
+   <p class="dim" style="margin:10px 0 0;font-size:12px">Profit = what the result sells for now (lowest listing) after the 5% AH cut, minus reagents at the cheaper of AH or vendor price. "Sells" and "Sold/day" are estimates of how fast the result sells on the whole AH (see an item's page for how they are worked out); you will sell only part of that, which is what the "You sell up to" limit is for. Profit per day = profit per item × the smaller of the market's daily sales and your limit.</p></div>`;
+  const chips=()=>{ $('#cpf').innerHTML=`<button class="${all()?'on':''}" data-p="*">All</button>`+profs.map(p=>`<button class="${!all()&&sel.has(p)?'on':''}" data-p="${esc(p)}">${esc(p)}</button>`).join('');
+    $('#cpf').querySelectorAll('button').forEach(b=>b.onclick=()=>{ const p=b.dataset.p;
+      if(p=='*') profs.forEach(x=>sel.add(x)); else if(all()){ sel.clear(); sel.add(p); }
+      else if(sel.has(p)){ sel.delete(p); if(!sel.size) profs.forEach(x=>sel.add(x)); } else sel.add(p);
+      lsSet('craftProfs',JSON.stringify([...sel])); S.prof=''; chips(); table(); }); };
+  const table=()=>{ const rs=rowsFor(); $('#cn').textContent=`${rs.length} recipes`;
+    $('#cwrap').innerHTML=`<table id="ct"><thead><tr><th>Craft</th><th>Profession</th><th title="How fast the result sells (estimate, confidence 0-100)">Sells</th><th class="n">Sold/day</th><th class="n">Sells for</th><th class="n">Cost</th><th class="n">Profit</th><th class="n">Return</th><th class="n" title="Profit per item × how many you could sell a day">Profit/day</th><th class="n">Listed</th><th class="n">Trend</th><th>Result price, 14 days</th></tr></thead><tbody>
+    ${rs.map(r=>`<tr onclick="go('recipe',{id:${r.recipe_id}})"><td>${iname(r.output_item,r.name,r.quality)}${r.output_count>1?` <span class="dim">×${r.output_count}</span>`:''}${r.out_listings<3&&r.status=='ok'?'<span class="tag thin">thin</span>':''}${r.missing?` <span class="dim">(no price: ${esc(r.missing)})</span>`:''}</td><td class="dim">${esc(r.profession)}</td>
+     <td ${V(mvRank(r.mv))}>${mvTag(r.mv)}</td><td class="n" ${V(r.spd)}>${r.spd==null?'<span class="dim">–</span>':mvNum(r.spd)}</td>
+     <td class="n" ${V(r.sale_price)}>${money(r.sale_price)}</td><td class="n" ${V(r.reagent_cost)}>${money(r.reagent_cost)}</td>
+     <td class="n" ${V(r.margin)}><b>${money(r.margin)}</b></td><td class="n" ${V(r.roi)}>${pct(r.roi)}</td>
+     <td class="n" ${V(r.per_day)}>${r.per_day==null?'<span class="dim">–</span>':`<b class="up">${money(r.per_day)}</b>`}</td><td class="n">${r.out_listings??'–'}</td>
+     <td class="n" ${V(r.slope7)}>${chg(r.slope7,'/d')}</td><td>${spark(r.spark)}</td></tr>`).join('')}
+    </tbody></table>${rs.length?'':'<p class="dim">No recipes match these filters.</p>'}`;
+    sortable($('#ct')); };
+  chips(); table();
+  const re=ch=>go('crafts',{view,minl,status,cap,op:onlyProfit,...ch});
+  $('#cvw').querySelectorAll('button').forEach(b=>b.onclick=()=>re({view:b.dataset.v}));
+  $('#cap').onchange=e=>re({cap:+e.target.value}); $('#minl').onchange=e=>re({minl:+e.target.value});
+  $('#status').onchange=e=>re({status:e.target.value}); $('#op').onchange=e=>re({op:e.target.checked});
 }
 async function recipe(){
   const d=await api('recipe?id='+S.id), r=d.recipe, m=d.margin||{};
