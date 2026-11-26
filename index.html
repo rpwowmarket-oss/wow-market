@@ -229,7 +229,10 @@ const pct=(x,d=0)=>x==null?'<span class="dim">–</span>':(x*100).toFixed(d)+'%'
 function chg(x,suf=''){ if(x==null) return '<span class="dim">–</span>'; const v=x*100; return `<span class="${v>1?'up':v<-1?'down':'dim'}">${v>0?'+':''}${Math.abs(v)>=100?v.toFixed(0):v.toFixed(1)}%${suf}</span>`; }
 const WH_ATTR=id=>`data-wowhead="item=${+id}&amp;domain=forever"`;   // Wowhead in-game tooltip on hover (Forever data)
 function whHide(){ try{ if(window.WH&&WH.Tooltip&&WH.Tooltip.hide) WH.Tooltip.hide(); }catch(e){} try{ if(window.$WowheadPower&&$WowheadPower.hideTooltip) $WowheadPower.hideTooltip(); }catch(e){} }
-const iname=(id,name,q)=>`<a class="q${q??1}" ${WH_ATTR(id)} onclick="event.stopPropagation();go('item',{id:${id}})">${esc(name||('item '+id))}</a>`;
+// Item links carry a real address (#item/ID): Wowhead's tooltip script needs an href, and Ctrl/middle-click opens a new tab.
+function goItem(e,id){ e.stopPropagation(); if(e.ctrlKey||e.metaKey||e.shiftKey) return; e.preventDefault(); go('item',{id}); }
+const IHREF=id=>`href="#item/${+id}" ${WH_ATTR(id)} onclick="goItem(event,${+id})"`;
+const iname=(id,name,q)=>`<a class="q${q??1}" ${IHREF(id)}>${esc(name||('item '+id))}</a>`;
 const ago=t=>{const m=Math.round((Date.now()/1000-t)/60); return m<60?m+' min ago':m<1440?(m/60).toFixed(1)+' h ago':(m/1440).toFixed(1)+' days ago'};
 const V=v=>`data-v="${v??''}"`;
 function nav(){ $('#nav').innerHTML=TABS.map(([k,l])=>`<button class="${S.tab==k?'on':''}" onclick="go('${k}')">${l}</button>`).join(''); }
@@ -431,7 +434,7 @@ async function compare(){
   const d=CMP.length?await api('compare?ids='+CMP.join(',')):[];
   M.innerHTML=`<div class="panel"><h2>Compare items <small>up to 6 · add with “+ compare” in Browse, on an item page, or below</small></h2>
    <div class="ctl"><div class="gs" style="margin:0"><input id="cq" placeholder="Add an item…" autocomplete="off"><div class="sugg" id="csugg" style="left:0;right:auto"></div></div>
-   <div class="chips">${d.map((r,k)=>`<span class="chip"><span style="color:${COLORS[k]}">●</span> <a class="q${r.quality??1}" ${WH_ATTR(r.item_id)} onclick="go('item',{id:${r.item_id}})">${esc(r.name)}</a><button onclick="rmCmp(${r.item_id})" title="remove">✕</button></span>`).join('')}</div></div>
+   <div class="chips">${d.map((r,k)=>`<span class="chip"><span style="color:${COLORS[k]}">●</span> <a class="q${r.quality??1}" ${IHREF(r.item_id)}>${esc(r.name)}</a><button onclick="rmCmp(${r.item_id})" title="remove">✕</button></span>`).join('')}</div></div>
    ${d.length?`<div class="ctl">${seg('mode',[['rel','% change'],['abs','Price'],['qty','Units listed']],S.mode||'rel')} ${seg('crng',[['7','7D'],['14','14D'],['30','30D'],['90','90D'],['all','All']],S.crng||'30')}</div><div class="chart" id="cCmp"></div>
    <p class="dim">“% change” rescales every item to 100 on the first day shown, so cheap and expensive items can be compared.</p>`:'<p class="dim">Nothing to compare yet.</p>'}</div>`;
   suggestBox($('#cq'),$('#csugg'),r=>addCmp(r.item_id));
@@ -523,7 +526,7 @@ async function writs(){
     const item=(r.item_price!=null?money(r.item_price)+cnt(r.item_listings):'<span class="dim">not listed</span>')+(r.item_id&&mvd.by.get(r.item_id)?' '+mvTag(mvd.by.get(r.item_id)):'');
     const craft=r.craft_cost!=null?money(r.craft_cost):`<span class="dim">${r.recipe_known?'reagent missing':'recipe not captured'}</span>`;
     const tot=r.total!=null?`<b>${money(r.total)}</b>`:'<span class="dim">–</span>';
-    return `<tr ${r.item_id?`onclick="go('item',{id:${r.item_id}})"`:''}><td>${r.item_id?iname(r.item_id,r.item,r.quality):esc(r.item)}${r.writ_id?` <a class="dim" title="the writ itself" ${WH_ATTR(r.writ_id)} onclick="event.stopPropagation();go('item',{id:${r.writ_id}})">(writ)</a>`:''}</td>
+    return `<tr ${r.item_id?`onclick="go('item',{id:${r.item_id}})"`:''}><td>${r.item_id?iname(r.item_id,r.item,r.quality):esc(r.item)}${r.writ_id?` <a class="dim" title="the writ itself" ${IHREF(r.writ_id)}>(writ)</a>`:''}</td>
       <td>${esc(r.professions.join(', '))}</td><td class="n" ${V(r.writ_price)}>${writ}</td><td class="n" ${V(r.item_price)}>${item}</td><td class="n" ${V(r.craft_cost)}>${craft}</td>
       <td class="n" ${V(r.total)}>${tot}</td><td class="n" ${V(p)}>${p!=null?`<span class="${p>0?'up':p<0?'down':'dim'}">${money(p)}</span>`:'<span class="dim">–</span>'}</td></tr>`; };
   const intro=`<div class="panel"><h2>Craftsman's Writs <small>one turn-in per level per day · each writ needs one of its item</small></h2>
