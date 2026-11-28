@@ -314,7 +314,7 @@ suggestBox($('#gsq'),$('#sugg'),r=>go('item',{id:r.item_id}),v=>go('browse',{q:v
 
 async function render(){ return ({briefing,market,browse,item,crafts,recipe,writs,ideas,watch,compare,data}[S.tab]||market)(); }
 
-// ---------- BRIEFING (landing page): newest briefing written by Claude, shown as colored cards
+// ---------- BRIEFING (landing page): newest briefing, shown as colored cards
 function md(t){ let h=esc(t); const blocks=[]; h=h.replace(/```(?:diff)?\n?([\s\S]*?)```/g,(m,c)=>{ blocks.push('<pre>'+c.replace(/\n$/,'')+'</pre>'); return '\u0000'+(blocks.length-1)+'\u0000'; });
   h=h.replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>').replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\n/g,'<br>');
   return h.replace(/\u0000(\d+)\u0000/g,(m,i)=>blocks[+i]).replace(/<br>(<pre>)/g,'$1').replace(/(<\/pre>)<br>/g,'$1'); }
@@ -328,7 +328,7 @@ async function briefing(){
   const j=await gz(latest?'briefing/latest.json':'briefing/archive/'+file), idx=(await gz('briefing/index.json')).items;
   const ts=j.embeds[0]&&j.embeds[0].timestamp?Date.parse(j.embeds[0].timestamp)/1000:null;
   const sel=idx.length>1?`<select onchange="go('briefing',{file:this.value})">${idx.map(i=>`<option value="${esc(i.file)}" ${i.file===file?'selected':''}>${esc(i.title)}</option>`).join('')}</select>`:'';
-  M.innerHTML=`${latest?await staleHtml():''}<p class="bnote">${latest?'Newest briefing':'Older briefing'}${ts?' · written '+ago(ts):''}. Briefings are written by Claude when the owner asks for one, so they can be older than the live data (${m.data_as_of?'prices as of '+ago(m.data_as_of):'no data'}). Advisory only. ${sel}</p>`
+  M.innerHTML=`${latest?await staleHtml():''}<p class="bnote">${latest?'Newest briefing':'Older briefing'}${ts?' · written '+ago(ts):''}${m.data_as_of?' · prices as of '+ago(m.data_as_of):''} · advisory only. ${sel}</p>`
    +j.embeds.map(embedHtml).join(''); }
 
 // ---------- MARKET
