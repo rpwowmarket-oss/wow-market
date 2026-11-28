@@ -339,12 +339,11 @@ function embedHtml(e){ const col='#'+(e.color>>>0).toString(16).padStart(6,'0');
    +(e.fields||[]).map(f=>`<div class="fn">${esc(f.name)}</div><div class="d">${md(f.value)}</div>`).join('')
    +(e.footer?`<div class="ft">${esc(e.footer)}</div>`:'')+`</div>`; }
 async function briefing(){
+  // Only the newest briefing is published; old #briefing/<file> links fall back to it.
   const m=await META(); if(!m.briefing){ S.tab='market'; return market(); }
-  const file=S.file||m.briefing.file, latest=file===m.briefing.file;
-  const j=await gz(latest?'briefing/latest.json':'briefing/archive/'+file), idx=(await gz('briefing/index.json')).items;
+  const j=await gz('briefing/latest.json');
   const ts=j.embeds[0]&&j.embeds[0].timestamp?Date.parse(j.embeds[0].timestamp)/1000:null;
-  const sel=idx.length>1?`<select onchange="go('briefing',{file:this.value})">${idx.map(i=>`<option value="${esc(i.file)}" ${i.file===file?'selected':''}>${esc(i.title)}</option>`).join('')}</select>`:'';
-  M.innerHTML=`${latest?await staleHtml():''}<p class="bnote">${latest?'Newest briefing':'Older briefing'}${ts?' · written '+ago(ts):''}${m.data_as_of?' · prices as of '+ago(m.data_as_of):''} · advisory only. ${sel}</p>`
+  M.innerHTML=`${await staleHtml()}<p class="bnote">Newest briefing${ts?' · written '+ago(ts):''}${m.data_as_of?' · prices as of '+ago(m.data_as_of):''} · advisory only.</p>`
    +j.embeds.map(embedHtml).join(''); }
 
 // ---------- MARKET
@@ -546,9 +545,34 @@ async function ideas(){
    <td class="n" ${V(x.discount)}>${pct(x.discount)}</td><td class="n" ${V(x.expected_rate*0.95-x.current_price)}><b>${money(x.expected_rate*0.95-x.current_price)}</b></td><td class="n">${x.listings}</td><td ${V(mvRank(mvd.by.get(x.item_id)))}>${mvTag(mvd.by.get(x.item_id))}</td><td class="n" ${V(x.slope7)}>${chg(x.slope7,'/d')}</td>
    <td class="n" ${V(x.qty_ratio)}>${x.qty_ratio==null?'–':`<span class="${x.qty_ratio>1.2?'down':'dim'}">${(x.qty_ratio*100).toFixed(0)}%</span>`}</td><td class="n" ${V(x.volatility)}>${x.volatility==null?'–':(x.volatility*100).toFixed(0)+'%'}</td><td>${spark(x.spark)}</td></tr>`).join('')}
   </tbody></table></div></div>`;
-  ideasDE(); sortable($('#st')); $('#mf').onchange=e=>go('ideas',{mf:+e.target.value,mp}); $('#mp').onchange=e=>go('ideas',{mf,mp:+e.target.value});
+  ideasConv().then(ideasDE); sortable($('#st')); $('#mf').onchange=e=>go('ideas',{mf:+e.target.value,mp}); $('#mp').onchange=e=>go('ideas',{mf,mp:+e.target.value});
 }
 
+// Quick conversions: buy the cheap form, convert (no profession needed for essences), sell the other form.
+async function ideasConv(){
+  let j, tb; try{ [j,tb]=await Promise.all([gz('computed/conversions.json.gz'),T()]); }catch(e){ return; }
+  if(!j.rows||!j.rows.length) return;
+  const all=S.convAll===true;
+  const rows=j.rows.map(r=>{ const combine=r.ratio>=1, inQ=combine?r.ratio:1, outQ=combine?1:1/r.ratio;
+    const cost=r.from_price!=null?inQ*r.from_price:null, sell=r.to_price!=null?outQ*r.to_price*0.95:null;
+    const ucost=r.from_usual!=null?inQ*r.from_usual:null, usell=r.to_usual!=null?outQ*r.to_usual*0.95:null;
+    return {...r,combine,inQ:Math.round(inQ*100)/100,outQ:Math.round(outQ*100)/100,cost,sell,profit:cost!=null&&sell!=null?sell-cost:null,
+            uprofit:ucost!=null&&usell!=null?usell-ucost:null}; });
+  const shown=rows.filter(r=>all||(r.profit!=null&&r.profit>0)).sort((a,b)=>(b.profit??-1e15)-(a.profit??-1e15));
+  const nm=id=>{ const i=tb.items.get(id)||{}; return iname(id,i.name,i.quality); };
+  const p=document.createElement('div'); p.className='panel';
+  p.innerHTML=`<h2>Quick conversions <small>buy one form, convert it, sell the other · profit after the 5% AH cut · per conversion</small>
+    <label style="font-size:12px;font-weight:400;margin-left:auto"><input type="checkbox" id="convAll" ${all?'checked':''}> show all, not just profitable</label></h2>
+   ${shown.length?`<div class="scroll"><table id="cvt"><thead><tr><th>Buy</th><th class="n">Cost</th><th></th><th>Sell</th><th class="n">Sells for</th><th class="n">Profit</th><th class="n">At usual prices</th><th class="n">Listed (buy / sell)</th></tr></thead><tbody>
+   ${shown.map(r=>`<tr><td>${r.inQ}× ${nm(r.from)} <span class="dim">@ ${money(r.from_price)}</span></td><td class="n" ${V(r.cost)}>${money(r.cost)}</td>
+     <td class="dim">${r.combine?'combine →':'split →'}</td><td>${r.outQ}× ${nm(r.to)} <span class="dim">@ ${money(r.to_price)}</span></td><td class="n" ${V(r.sell)}>${money(r.sell)}</td>
+     <td class="n" ${V(r.profit)}>${r.profit==null?'<span class="dim">–</span>':`<b class="${r.profit>=0?'up':'down'}">${money(r.profit)}</b>`}</td>
+     <td class="n" ${V(r.uprofit)}>${r.uprofit==null?'<span class="dim">–</span>':`<span class="${r.uprofit>=0?'up':'down'}">${money(r.uprofit)}</span>`}</td>
+     <td class="n">${r.from_listings??0} / ${r.to_listings??0}</td></tr>`).join('')}
+   </tbody></table></div>`:'<p class="dim" style="margin:0">No conversion is profitable at today\'s lowest prices.</p>'}
+   <p class="dim" style="margin:8px 0 0;font-size:12px">Essences convert without a profession: three Lesser combine into one Greater, and one Greater splits into three Lesser (use the item). Profit uses each item's lowest listing now; buying several usually costs more than the lowest price, and selling many can push the other price down, so check how many are listed. "At usual prices" shows whether the gap is normal or just today's.</p>`;
+  M.appendChild(p);
+  sortable($('#cvt')); $('#convAll').onchange=e=>go('ideas',{mf:S.mf,mp:S.mp,convAll:e.target.checked}); }
 async function ideasDE(){ const p=document.createElement('div'); p.className='panel';
   p.innerHTML=`<h2>Disenchant ideas <small>items worth more as enchanting materials</small></h2><p class="dim" style="margin:0">Now on their own tab: <a onclick="go('disenchant')">Disenchant</a> (buy and disenchant, or craft and disenchant).</p>`;
   M.appendChild(p); }
