@@ -66,7 +66,7 @@ details.wl>summary{cursor:pointer;list-style:none}details.wl>summary::-webkit-de
 <main id="main"></main><div id="tip"></div>
 <script>
 const $=s=>document.querySelector(s), M=$('#main'), TIP=$('#tip');
-const TABS=[['briefing','Briefing'],['market','Market'],['browse','Browse'],['crafts','Crafts'],['writs','Writs'],['ideas','Buy ideas'],['watch','Watch lists'],['compare','Compare'],['data','Data coverage']];
+const TABS=[['briefing','Briefing'],['market','Market'],['browse','Browse'],['crafts','Crafts'],['writs','Writs'],['disenchant','Disenchant'],['ideas','Buy ideas'],['watch','Watch lists'],['compare','Compare'],['data','Data coverage']];
 const COLORS=['#e2b54e','#5b9cf0','#5fcf7a','#c27df0','#ec6f67','#4fd1c5'];
 function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
 function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
@@ -117,6 +117,22 @@ const mvNum=x=>x==null?'–':(x>=100?Math.round(x).toLocaleString():x>=10?x.toFi
 function mvTag(m){ if(!m) return '<span class="dim">–</span>';
   return `<span class="mv mv-${esc(m.tier)}" title="${esc(m.tier)} · confidence ${m.confidence}/100${m.sold_per_day!=null?' · about '+mvNum(m.sold_per_day)+' sold per day':''} (estimate)">${esc(m.tier)} <small>${m.confidence}</small></span>`; }
 const mvRank=m=>m?MV_RANK[m.tier]*1000+m.confidence:'';
+let _DE; function DE(){ return _DE||(_DE=(async()=>{ const j=await gz('computed/de.json.gz'), by=new Map();
+  for(const [id,r] of Object.entries(j.items||{})) by.set(+id,Object.fromEntries(j.cols.map((c,k)=>[c,r[k]]))); return {by}; })().catch(()=>({by:new Map()}))); }
+const DE_NOTE='Needs an enchanter with enough skill for the item. Values are averages over many disenchants, with each material at its lowest AH price now, after the 5% AH cut. Selling many materials can push their price down: check how many are listed, especially rare ones like Nexus Crystals.';
+function dePanel(d,tb){
+  if(!d) return '';
+  const pr=(a,b)=>a!=null&&b!=null?`<b class="${a-b>=0?'up':'down'}">${money(a-b)}</b>`:'<span class="dim">–</span>';
+  const rec=d.recipe?tb.recipes.get(d.recipe):null;
+  return `<div class="panel"><h2>Disenchant <small>estimate · what this item is worth as enchanting materials</small></h2>
+   <div class="grid" style="margin:4px 0 0">
+    <div class="stat"><b>${money(d.de_net)}</b><span>disenchant value after AH cut${d.all_mats_priced?'':' · some materials not on the AH, so this is a low estimate'}</span></div>
+    <div class="stat"><b>${d.price!=null?pr(d.de_net,d.price):'<span class="dim">not listed</span>'}</b><span>buy here and disenchant${d.price!=null?' (lowest now '+money(d.price,1)+')':''}</span></div>
+    <div class="stat"><b>${d.craft_cost!=null?pr(d.de_net,d.craft_cost):'<span class="dim">–</span>'}</b><span>${d.craft_cost!=null?`craft and disenchant (reagents ${money(d.craft_cost,1)}${rec?`, <a onclick="go('recipe',{id:${d.recipe}})">recipe</a>`:''})`:'craft and disenchant (no captured recipe with prices)'}</span></div>
+    <div class="stat"><b>${d.price!=null&&d.de_net!=null?(d.price*0.95>d.de_net?'Sell it':'Disenchant'):'–'}</b><span>better if you already have one${d.price!=null?': sell '+money(d.price*0.95,1)+' after cut':''}</span></div></div>
+   <table style="margin-top:10px"><thead><tr><th>Material</th><th class="n">Expected per disenchant</th><th class="n">AH lowest</th><th class="n">Worth</th></tr></thead><tbody>
+    ${d.mats.map(([mid,e,p])=>{ const inf=tb.items.get(mid)||{}; return `<tr><td>${iname(mid,inf.name,inf.quality)}</td><td class="n">${e}</td><td class="n">${p!=null?money(p):'<span class="dim">not listed</span>'}</td><td class="n">${p!=null?money(e*p):'–'}</td></tr>`; }).join('')}
+   </tbody></table><p class="dim" style="margin:8px 0 0;font-size:12px">${DE_NOTE}</p></div>`; }
 function mvPanel(m,meta){
   const h=meta&&meta.covered_h!=null?` · ${Math.round(meta.covered_h)} hours of scans over ${(+meta.listing_days).toFixed(1)} days`:'';
   const head=`<h2>How fast it sells <small>estimate · last 14 days${h}</small></h2>`;
@@ -312,7 +328,7 @@ function suggestBox(input,box,onPick,onEnter){ let t, sel=-1, items=[];
   input.onblur=()=>setTimeout(()=>box.style.display='none',150); }
 suggestBox($('#gsq'),$('#sugg'),r=>go('item',{id:r.item_id}),v=>go('browse',{q:v}));
 
-async function render(){ return ({briefing,market,browse,item,crafts,recipe,writs,ideas,watch,compare,data}[S.tab]||market)(); }
+async function render(){ return ({briefing,market,browse,item,crafts,recipe,writs,disenchant,ideas,watch,compare,data}[S.tab]||market)(); }
 
 // ---------- BRIEFING (landing page): newest briefing, shown as colored cards
 function md(t){ let h=esc(t); const blocks=[]; h=h.replace(/```(?:diff)?\n?([\s\S]*?)```/g,(m,c)=>{ blocks.push('<pre>'+c.replace(/\n$/,'')+'</pre>'); return '\u0000'+(blocks.length-1)+'\u0000'; });
@@ -392,7 +408,7 @@ async function browse(){
 
 // ---------- ITEM
 async function item(){
-  const d=await api('item?id='+S.id), i=d.info, m=d.metrics||{}, st=d.stats, inCmp=CMP.includes(i.item_id), mvd=await MV();
+  const d=await api('item?id='+S.id), i=d.info, m=d.metrics||{}, st=d.stats, inCmp=CMP.includes(i.item_id), mvd=await MV(), dej=await DE(), tbl=await T();
   M.innerHTML=`<div class="crumb"><a onclick="go('browse',{cls:${i.class_id}})">${esc(i.cls)}</a> › <a onclick="go('browse',{cls:${i.class_id},sub:${i.subclass_id}})">${esc(i.sub)}</a></div>
   <div class="panel"><h2 class="q${i.quality??1}" style="font-size:21px;margin-bottom:4px">${esc(i.name)} <small>#${i.item_id}${i.ilvl?' · item level '+i.ilvl:''}${i.stack>1?' · stacks to '+i.stack:''}</small>
    <a style="font-size:12px;font-weight:400" id="cmpl">${inCmp?'in comparison →':'+ add to comparison'}</a>
@@ -406,6 +422,7 @@ async function item(){
     <div class="stat"><b>${d.vendor?money(d.vendor.unit_price):'–'} / ${i.vendor_sell?money(i.vendor_sell):'–'}</b><span>vendor buy / vendor sell${d.vendor&&d.vendor.limited?' · limited stock':''}</span></div>
    </div></div>
   ${mvPanel(mvd.by.get(i.item_id),mvd.meta)}
+  ${dePanel(dej.by.get(i.item_id),tbl)}
   <div class="panel"><h2>Price &amp; quantity by day ${seg('rng',[['7','7D'],['14','14D'],['30','30D'],['90','90D'],['all','All']],S.rng||'30')} ${seg('sc',[['lin','Linear'],['log','Log']],S.sc||'lin')}</h2>
    <div class="chart" id="cDay"></div>${legend([['daily lowest','#e2b54e'],['daily highest','#5b9cf0'],['units listed (right axis)','#4fd1c5']])}</div>
   <div class="panel" id="pScan"><h2>Every scan <small>individual scans · lowest and typical listing price, units listed</small> ${seg('scr',[['1','1D'],['3','3D'],['7','7D'],['30','30D'],['all','All']],S.scr||'3')}</h2><div class="chart" id="cScan"></div>${legend([['lowest','#e2b54e'],['typical (median) listing','#c27df0'],['units listed (right axis)','#4fd1c5']])}</div>
@@ -532,11 +549,44 @@ async function ideas(){
   ideasDE(); sortable($('#st')); $('#mf').onchange=e=>go('ideas',{mf:+e.target.value,mp}); $('#mp').onchange=e=>go('ideas',{mf,mp:+e.target.value});
 }
 
-async function ideasDE(){ const rs=await api('disenchant'); if(!rs.length) return; const p=document.createElement('div'); p.className='panel';
-  p.innerHTML=`<h2>Disenchant candidates <small>buy, disenchant, sell the materials · estimates from average disenchant results · profit is after the 5% cut</small></h2>
-  <div class="scroll"><table><thead><tr><th>Item</th><th class="n">Lowest now</th><th class="n">Materials worth (est.)</th><th class="n">Est. profit</th></tr></thead><tbody>
-  ${rs.map(x=>`<tr onclick="go('item',{id:${x.item_id}})"><td>${iname(x.item_id,x.name,x.quality)}</td><td class="n">${money(x.price)}</td><td class="n">${money(x.de_value)}</td><td class="n"><b>${money(x.de_profit)}</b></td></tr>`).join('')}</tbody></table></div>`;
+async function ideasDE(){ const p=document.createElement('div'); p.className='panel';
+  p.innerHTML=`<h2>Disenchant ideas <small>items worth more as enchanting materials</small></h2><p class="dim" style="margin:0">Now on their own tab: <a onclick="go('disenchant')">Disenchant</a> (buy and disenchant, or craft and disenchant).</p>`;
   M.appendChild(p); }
+
+// ---------- DISENCHANT
+async function disenchant(){
+  const [dj,tb,st]=await Promise.all([DE(),T(),staleHtml()]);
+  const minp=S.minp??100, q=S.q??-1, prof=S.prof??'', op=S.op!==false;
+  const all=[...dj.by.entries()].map(([id,d])=>({id,...d,inf:tb.items.get(id)})).filter(r=>r.inf&&(q<0||r.inf.quality==q));
+  const buy=all.filter(r=>r.price&&r.de_net).map(r=>({...r,profit:r.de_net-r.price})).filter(r=>r.profit>=minp).sort((a,b)=>b.profit-a.profit);
+  const crAll=all.filter(r=>r.craft_cost!=null&&r.de_net).map(r=>({...r,profit:r.de_net-r.craft_cost,prof:(tb.recipes.get(r.recipe)||{}).profession||'Unknown'}));
+  const profs=[...new Set(crAll.map(r=>r.prof))].sort();
+  const cr=crAll.filter(r=>(!prof||r.prof===prof)&&(!op||r.profit>=minp)).sort((a,b)=>b.profit-a.profit);
+  const mats=r=>r.mats.slice().sort((a,b)=>b[1]*(b[2]||0)-a[1]*(a[2]||0)).slice(0,2).map(m=>esc((tb.items.get(m[0])||{}).name||('item '+m[0]))).join(', ');
+  const thin=r=>r.all_mats_priced?'':'<span class="tag thin" title="some materials are not on the AH right now, so the value is a low estimate">part priced</span>';
+  const pc=x=>`<b class="${x>=0?'up':'down'}">${money(x)}</b>`;
+  M.innerHTML=st+`<div class="panel"><h2>Disenchant <small>items worth more as enchanting materials than as items · advisory only</small></h2>
+   <div class="ctl"><label>Min. profit</label><select id="dmp">${[[1,'any'],[100,'1s'],[1000,'10s'],[5000,'50s'],[10000,'1g'],[50000,'5g']].map(([k,l])=>`<option value="${k}" ${k==minp?'selected':''}>${l}</option>`).join('')}</select>
+    <label>Quality</label><select id="dq">${[[-1,'Any'],[2,'Uncommon'],[3,'Rare'],[4,'Epic']].map(([k,l])=>`<option value="${k}" ${k==q?'selected':''}>${l}</option>`).join('')}</select></div>
+   <p class="dim" style="margin:8px 0 0;font-size:12px">${DE_NOTE}</p></div>
+  <div class="panel"><h2>Buy and disenchant <small>${buy.length} items on the AH now · profit = disenchant value after cut − price</small></h2>
+   ${buy.length?`<div class="scroll"><table id="dbt"><thead><tr><th>Item</th><th class="n">ilvl</th><th class="n">Lowest now</th><th class="n">Listed</th><th>Disenchants into</th><th class="n">Disenchant value</th><th class="n">Profit</th><th class="n">Return</th></tr></thead><tbody>
+   ${buy.map(r=>`<tr onclick="go('item',{id:${r.id}})"><td>${iname(r.id,r.inf.name,r.inf.quality)}${thin(r)}</td><td class="n">${r.inf.ilvl??''}</td><td class="n" ${V(r.price)}>${money(r.price)}</td><td class="n">${r.listings??'–'}</td>
+     <td class="dim">${mats(r)}</td><td class="n" ${V(r.de_net)}>${money(r.de_net)}</td><td class="n" ${V(r.profit)}>${pc(r.profit)}</td><td class="n" ${V(r.profit/r.price)}>${pct(r.profit/r.price)}</td></tr>`).join('')}
+   </tbody></table></div>`:'<p class="dim">Nothing on the AH right now is worth more disenchanted than its price (at this minimum profit).</p>'}</div>
+  <div class="panel"><h2>Craft and disenchant <small>${cr.length} recipes · profit = disenchant value after cut − reagent cost</small></h2>
+   <div class="ctl" style="margin-bottom:8px"><label>Profession</label><select id="dpf"><option value="">All</option>${profs.map(p=>`<option ${p==prof?'selected':''}>${esc(p)}</option>`).join('')}</select>
+    <label><input type="checkbox" id="dop" ${op?'checked':''}> only at least the min. profit</label></div>
+   ${cr.length?`<div class="scroll"><table id="dct"><thead><tr><th>Item made</th><th>Profession</th><th class="n">ilvl</th><th class="n">Craft cost</th><th>Disenchants into</th><th class="n">Disenchant value</th><th class="n">Profit</th><th class="n">Sells for (AH)</th><th>Better to</th></tr></thead><tbody>
+   ${cr.map(r=>{ const sell=r.price!=null?r.price*0.95:null; const best=sell!=null&&sell>r.de_net?'<span class="tag thin">sell it</span>':'<span class="tag">disenchant</span>';
+     return `<tr onclick="go('recipe',{id:${r.recipe}})"><td>${iname(r.id,r.inf.name,r.inf.quality)}${thin(r)}</td><td class="dim">${esc(r.prof)}</td><td class="n">${r.inf.ilvl??''}</td><td class="n" ${V(r.craft_cost)}>${money(r.craft_cost)}</td>
+     <td class="dim">${mats(r)}</td><td class="n" ${V(r.de_net)}>${money(r.de_net)}</td><td class="n" ${V(r.profit)}>${pc(r.profit)}</td><td class="n" ${V(r.price)}>${r.price!=null?money(r.price):'<span class="dim">not listed</span>'}</td><td>${r.profit>0||(sell!=null&&sell>r.craft_cost)?best:''}</td></tr>`; }).join('')}
+   </tbody></table></div>`:'<p class="dim">No captured recipe makes an item worth disenchanting at this minimum profit.</p>'}</div>`;
+  sortable($('#dbt')); sortable($('#dct'));
+  const re=ch=>go('disenchant',{minp,q,prof,op,...ch});
+  $('#dmp').onchange=e=>re({minp:+e.target.value}); $('#dq').onchange=e=>re({q:+e.target.value});
+  $('#dpf').onchange=e=>re({prof:e.target.value}); $('#dop').onchange=e=>re({op:e.target.checked});
+}
 
 // ---------- WATCH
 async function watch(){
