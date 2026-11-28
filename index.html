@@ -589,24 +589,26 @@ async function disenchant(){
   const mats=r=>r.mats.slice().sort((a,b)=>b[1]*(b[2]||0)-a[1]*(a[2]||0)).slice(0,2).map(m=>esc((tb.items.get(m[0])||{}).name||('item '+m[0]))).join(', ');
   const thin=r=>r.all_mats_priced?'':'<span class="tag thin" title="some materials are not on the AH right now, so the value is a low estimate">part priced</span>';
   const pc=x=>`<b class="${x>=0?'up':'down'}">${money(x)}</b>`;
-  M.innerHTML=st+`<div class="panel"><h2>Disenchant <small>items worth more as enchanting materials than as items · advisory only</small></h2>
+  const dOpen=k=>lsGet('de_'+k)!=='0'?'open':'';
+  M.innerHTML=st+`<details class="panel wl" data-de="ctl" ${dOpen('ctl')}><summary><h2><span class="arr">▶</span> Disenchant <small>items worth more as enchanting materials than as items · advisory only · click to show or hide</small></h2></summary>
    <div class="ctl"><label>Min. profit</label><select id="dmp">${[[1,'any'],[100,'1s'],[1000,'10s'],[5000,'50s'],[10000,'1g'],[50000,'5g']].map(([k,l])=>`<option value="${k}" ${k==minp?'selected':''}>${l}</option>`).join('')}</select>
     <label>Quality</label><select id="dq">${[[-1,'Any'],[2,'Uncommon'],[3,'Rare'],[4,'Epic']].map(([k,l])=>`<option value="${k}" ${k==q?'selected':''}>${l}</option>`).join('')}</select></div>
-   <p class="dim" style="margin:8px 0 0;font-size:12px">${DE_NOTE}</p></div>
-  <div class="panel"><h2>Buy and disenchant <small>${buy.length} items on the AH now · profit = disenchant value after cut − price</small></h2>
+   <p class="dim" style="margin:8px 0 0;font-size:12px">${DE_NOTE}</p></details>
+  <details class="panel wl" data-de="buy" ${dOpen('buy')}><summary><h2><span class="arr">▶</span> Buy and disenchant <small>${buy.length} items on the AH now · profit = disenchant value after cut − price</small></h2></summary>
    ${buy.length?`<div class="scroll"><table id="dbt"><thead><tr><th>Item</th><th class="n">ilvl</th><th class="n">Lowest now</th><th class="n">Listed</th><th>Disenchants into</th><th class="n">Disenchant value</th><th class="n">Profit</th><th class="n">Return</th></tr></thead><tbody>
    ${buy.map(r=>`<tr onclick="go('item',{id:${r.id}})"><td>${iname(r.id,r.inf.name,r.inf.quality)}${thin(r)}</td><td class="n">${r.inf.ilvl??''}</td><td class="n" ${V(r.price)}>${money(r.price)}</td><td class="n">${r.listings??'–'}</td>
      <td class="dim">${mats(r)}</td><td class="n" ${V(r.de_net)}>${money(r.de_net)}</td><td class="n" ${V(r.profit)}>${pc(r.profit)}</td><td class="n" ${V(r.profit/r.price)}>${pct(r.profit/r.price)}</td></tr>`).join('')}
-   </tbody></table></div>`:'<p class="dim">Nothing on the AH right now is worth more disenchanted than its price (at this minimum profit).</p>'}</div>
-  <div class="panel"><h2>Craft and disenchant <small>${cr.length} recipes · profit = disenchant value after cut − reagent cost</small></h2>
+   </tbody></table></div>`:'<p class="dim">Nothing on the AH right now is worth more disenchanted than its price (at this minimum profit).</p>'}</details>
+  <details class="panel wl" data-de="craft" ${dOpen('craft')}><summary><h2><span class="arr">▶</span> Craft and disenchant <small>${cr.length} recipes · profit = disenchant value after cut − reagent cost</small></h2></summary>
    <div class="ctl" style="margin-bottom:8px"><label>Profession</label><select id="dpf"><option value="">All</option>${profs.map(p=>`<option ${p==prof?'selected':''}>${esc(p)}</option>`).join('')}</select>
     <label><input type="checkbox" id="dop" ${op?'checked':''}> only at least the min. profit</label></div>
    ${cr.length?`<div class="scroll"><table id="dct"><thead><tr><th>Item made</th><th>Profession</th><th class="n">ilvl</th><th class="n">Craft cost</th><th>Disenchants into</th><th class="n">Disenchant value</th><th class="n">Profit</th><th class="n">Sells for (AH)</th><th>Better to</th></tr></thead><tbody>
    ${cr.map(r=>{ const sell=r.price!=null?r.price*0.95:null; const best=sell!=null&&sell>r.de_net?'<span class="tag thin">sell it</span>':'<span class="tag">disenchant</span>';
      return `<tr onclick="go('recipe',{id:${r.recipe}})"><td>${iname(r.id,r.inf.name,r.inf.quality)}${thin(r)}</td><td class="dim">${esc(r.prof)}</td><td class="n">${r.inf.ilvl??''}</td><td class="n" ${V(r.craft_cost)}>${money(r.craft_cost)}</td>
      <td class="dim">${mats(r)}</td><td class="n" ${V(r.de_net)}>${money(r.de_net)}</td><td class="n" ${V(r.profit)}>${pc(r.profit)}</td><td class="n" ${V(r.price)}>${r.price!=null?money(r.price):'<span class="dim">not listed</span>'}</td><td>${r.profit>0||(sell!=null&&sell>r.craft_cost)?best:''}</td></tr>`; }).join('')}
-   </tbody></table></div>`:'<p class="dim">No captured recipe makes an item worth disenchanting at this minimum profit.</p>'}</div>`;
+   </tbody></table></div>`:'<p class="dim">No captured recipe makes an item worth disenchanting at this minimum profit.</p>'}</details>`;
   sortable($('#dbt')); sortable($('#dct'));
+  document.querySelectorAll('details[data-de]').forEach(d=>d.addEventListener('toggle',()=>lsSet('de_'+d.dataset.de,d.open?'1':'0')));
   const re=ch=>go('disenchant',{minp,q,prof,op,...ch});
   $('#dmp').onchange=e=>re({minp:+e.target.value}); $('#dq').onchange=e=>re({q:+e.target.value});
   $('#dpf').onchange=e=>re({prof:e.target.value}); $('#dop').onchange=e=>re({op:e.target.checked});
